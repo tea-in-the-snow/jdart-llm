@@ -23,6 +23,7 @@ import gov.nasa.jpf.constraints.api.ValuationEntry;
 import gov.nasa.jpf.constraints.api.Variable;
 import gov.nasa.jpf.constraints.java.ObjectConstraints;
 import gov.nasa.jpf.constraints.parser.ParserUtil;
+import gov.nasa.jpf.constraints.types.BuiltinTypes;
 import gov.nasa.jpf.constraints.types.Type;
 import gov.nasa.jpf.jdart.ConcolicUtil.Pair;
 import gov.nasa.jpf.jdart.config.AnalysisConfig;
@@ -120,6 +121,11 @@ public class ConcolicMethodExplorer {
   
 
   public ConcolicMethodExplorer(ConcolicConfig config, String id, MethodInfo mi) {
+    System.out.println("-------------------------------------------------------------");
+    System.out.println("Creating ConcolicMethodExplorer for method: " + mi.getFullName());
+    System.out.println("  with config id: " + id);
+    System.out.println("  method info: " + mi);
+    System.out.println("-------------------------------------------------------------");
     // store method info and config
     this.methodInfo = mi;
     this.methodConfig = config.getMethodConfig(id);
@@ -318,6 +324,10 @@ public class ConcolicMethodExplorer {
         ElementInfo ei = heap.get(ref);
         if(ei != null)
           symContext.processObject(ei, name, true);
+
+        Variable<?> refVar = Variable.create(BuiltinTypes.SINT32, name);
+        SymbolicParam<?> sp = new SymbolicParam<>(refVar, stackIdx);
+        symContext.addStackVar(sp);
       }
       else { // primitive type
         Type<?> t = ConcolicUtil.forTypeCode(tc);
