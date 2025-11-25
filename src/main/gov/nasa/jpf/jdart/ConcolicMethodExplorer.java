@@ -325,9 +325,11 @@ public class ConcolicMethodExplorer {
         if(ei != null)
           symContext.processObject(ei, name, true);
 
-        Variable<?> refVar = Variable.create(BuiltinTypes.SINT32, name);
-        SymbolicParam<?> sp = new SymbolicParam<>(refVar, stackIdx);
-        symContext.addStackVar(sp);
+        if (anaConf.createRefSymbolicParams()) {
+          Variable<?> refVar = Variable.create(BuiltinTypes.SINT32, name);
+          SymbolicParam<?> sp = new SymbolicParam<>(refVar, stackIdx);
+          symContext.addStackVar(sp);
+        }
       }
       else { // primitive type
         Type<?> t = ConcolicUtil.forTypeCode(tc);

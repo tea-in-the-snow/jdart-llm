@@ -104,6 +104,10 @@ public class AnalysisConfig {
   private Predicate<? super MethodInfo> resumeExploration = Predicates.alwaysFalse();
   private boolean exploreInitially = true;
   
+  // whether to create stack-level symbolic variables for reference-type parameters
+  // controlled by config key: <prefix>.symbolic.symbolic_ref_params
+  private boolean createRefSymbolicParams = false;
+  
   private int treeMaxDepth = -1;
   private int treeMaxAltDepth = -1;
   private int maxNestingDepth = -1;
@@ -168,6 +172,10 @@ public class AnalysisConfig {
     if(config.hasValue(symbInclKey)) {
       String symbInclStr = config.getString(symbInclKey);
       setSymbolicFieldsInclude(symbInclStr);
+    }
+    String symbRefKey = symbPrefix + "symbolic_ref_params";
+    if(config.hasValue(symbRefKey)) {
+      this.createRefSymbolicParams = config.getBoolean(symbRefKey);
     }
     
   }
@@ -303,6 +311,10 @@ public class AnalysisConfig {
   
   public boolean isExploreInitially() {
     return exploreInitially;
+  }
+
+  public boolean createRefSymbolicParams() {
+    return createRefSymbolicParams;
   }
   
   public void setSuspendExploration(String str) {
