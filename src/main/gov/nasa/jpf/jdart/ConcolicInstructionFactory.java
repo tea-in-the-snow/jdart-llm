@@ -64,6 +64,7 @@ import gov.nasa.jpf.jdart.bytecode.IF_ICMPNE;
 import gov.nasa.jpf.jdart.bytecode.IINC;
 import gov.nasa.jpf.jdart.bytecode.IMUL;
 import gov.nasa.jpf.jdart.bytecode.INEG;
+import gov.nasa.jpf.jdart.bytecode.INSTANCEOF;
 import gov.nasa.jpf.jdart.bytecode.IOR;
 import gov.nasa.jpf.jdart.bytecode.IREM;
 import gov.nasa.jpf.jdart.bytecode.ISHL;
@@ -156,6 +157,11 @@ public class ConcolicInstructionFactory extends gov.nasa.jpf.jvm.bytecode.Instru
 	@Override
 	public gov.nasa.jpf.jvm.bytecode.INEG ineg() {
 		return new INEG();
+	}
+
+	@Override
+	public gov.nasa.jpf.jvm.bytecode.INSTANCEOF instanceof_(String typeName) {
+		return new INSTANCEOF(typeName);
 	}
 
 	@Override

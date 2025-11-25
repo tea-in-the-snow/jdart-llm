@@ -70,6 +70,12 @@ public class ConstraintsTree {
     
     public Node(Expression<Boolean> cond, PathResult result) {
       this.path = new Path(cond, result);
+      
+      System.out.println("----------------------------------------------------");
+      System.out.println("Created leaf node with path: " + this.path);
+      System.out.println("  Condition: " + cond);
+      System.out.println("  Result: " + result);
+      System.out.println("----------------------------------------------------");
     }
     
     public boolean isLeaf() { return decision == null; }
