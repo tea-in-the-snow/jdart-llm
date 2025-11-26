@@ -55,18 +55,4 @@ public class INSTANCEOF extends gov.nasa.jpf.jvm.bytecode.INSTANCEOF {
 
     return getNext(ti);
   }
-
-  // private Type<?> resolveType(String typeSignature) {
-  //   // 这里需要实现将 typeName 转换为 JConstraints 的 Type<?>
-  //   // 这可能涉及类加载和类型映射
-  //   // 例如，可以使用 Class.forName 加载类，然后创建 ConcreteType
-  //   try {
-  //     Class<?> cls = Class.forName(typeSignature.replace('/', '.'));
-  //     return new ConcreteType<>(cls);
-  //   } catch (ClassNotFoundException e) {
-  //     throw new RuntimeException("Failed to resolve type: " + typeName, e);
-  //   }
-  // }
-
-
 }
