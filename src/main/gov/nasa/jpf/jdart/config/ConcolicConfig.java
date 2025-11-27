@@ -23,6 +23,7 @@ import gov.nasa.jpf.constraints.types.TypeContext;
 import gov.nasa.jpf.jdart.ConcolicPerturbator;
 import gov.nasa.jpf.jdart.ConcolicUtil;
 import gov.nasa.jpf.jdart.termination.NeverTerminate;
+import gov.nasa.jpf.jdart.solvers.llm.LLMEnhancedSolver;
 import gov.nasa.jpf.jdart.termination.TerminationStrategy;
 
 import java.util.Arrays;
@@ -207,9 +208,16 @@ public class ConcolicConfig {
    * @param conf 
    */
   private void initialize(Config conf) {
-    // create a constraint solver
     ConstraintSolverFactory cFactory = new ConstraintSolverFactory(conf);
-    this.solver = cFactory.createSolver(conf);
+    // allow selecting an LLM-enhanced solver explicitly from jpf properties
+    // if `jdart.llm.enhancement=true` is set, prefer the LLMEnhencedSolver
+    if (conf.getBoolean("jdart.llm.enhancement", false)) {
+      this.solver = new LLMEnhancedSolver(cFactory.createSolver(conf));
+    }
+    else {
+      // create a constraint solver (default)
+      this.solver = cFactory.createSolver(conf);
+    }
     
     // parse symbolic method info
     if(conf.hasValue(CONF_PREFIX + ".method")) {
