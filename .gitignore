@@ -18,6 +18,7 @@ build/
 
 # Log files
 *.log
+/llm_service/log/
 
 # OS generated files
 .DS_Store
