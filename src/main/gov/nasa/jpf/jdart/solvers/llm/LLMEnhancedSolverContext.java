@@ -87,6 +87,9 @@ public class LLMEnhancedSolverContext extends SolverContext {
     // First, solve normal (non-high-level) constraints using base solver
     Result baseResult = bashSolverContext.solve(val);
     if (baseResult != Result.SAT) {
+      System.out.println("**********************************************************");
+      System.out.println("Base constraints are UNSAT, returning UNSAT");
+      System.out.println("**********************************************************");
       return baseResult;
     }
 
@@ -165,7 +168,15 @@ public class LLMEnhancedSolverContext extends SolverContext {
     StringBuilder sb = new StringBuilder();
     sb.append('{');
     sb.append("\"constraints\":[");
-    String constraintsJson = hlExpressions.stream()
+
+    // Use only the current (top) high-level scope to avoid mixing constraints
+    // from different exploration branches.
+    List<Expression<Boolean>> scopeExprs = highLevelStack.peek();
+    if (scopeExprs == null) {
+      scopeExprs = hlExpressions;
+    }
+
+    String constraintsJson = scopeExprs.stream()
         .map(Object::toString)
         .map(LLMEnhancedSolverContext::escapeJson)
         .map(s -> "\"" + s + "\"")
