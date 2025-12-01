@@ -35,4 +35,4 @@ Thumbs.db
 *~
 
 # pychache
-/llm_service/pycache/
+/llm_service/__pycache__/
