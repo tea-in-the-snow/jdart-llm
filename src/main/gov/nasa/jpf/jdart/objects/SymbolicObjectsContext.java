@@ -175,6 +175,28 @@ public class SymbolicObjectsContext {
     ClassInfo ci = ei.getClassInfo();
     SymbolicObjectHandler hndlr = getSymbolicObjectHandler(ci);
     hndlr.annotateObject(ei, name, this);
+    // SymbolicObjectHandler hndlr = getSymbolicObjectHandler(ci);
+    // hndlr.annotateObject(ei, name, this);
+  }
+
+  public void processPolymorphicObject(ElementInfo ei, String name) {
+    logger.finest("Making polymorphic " + name + " symbolic");
+    SymbolicObject attr = ei.getObjectAttr(SymbolicObject.class);
+    if(attr != null)
+      return;
+    attr = new SymbolicObject(name);
+    ei.defreeze();
+    ei.setObjectAttr(attr);
+    doProcessPolymorphicObject(ei,  name);
+    //ei.freeze();
+  }
+
+  public void doProcessPolymorphicObject(ElementInfo ei, String name) {
+    ClassInfo ci = ei.getClassInfo();
+    // SymbolicObjectHandler hndlr = getSymbolicObjectHandler(ci);
+    SymbolicObjectHandler hndlr = new PolymorphicObjectHandler();
+    hndlr.initialize(ci);
+    hndlr.annotateObject(ei, name, this);
   }
   
   public void processField(ElementInfo ei, FieldInfo fi, String name) {

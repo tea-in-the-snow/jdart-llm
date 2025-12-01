@@ -119,6 +119,58 @@ public class ConcolicMethodExplorer {
   
   private final SolverContext solverCtx;
   
+  /**
+   * Get all reference type symbolic variables and their current values.
+   * Returns a Valuation containing only reference type variables (those ending with ".__ref").
+   * Only includes values that correspond to objects that exist in the initial parameters.
+   */
+  public Valuation getReferenceTypeSymbolicValues() {
+    Valuation refVals = new Valuation();
+    if(symContext == null || initParams == null)
+      return refVals;
+    
+    // Get reference values from initValuation, which contains the initial values
+    // from the first execution when objects were guaranteed to exist in the heap
+    if(initValuation == null)
+      return refVals;
+    
+    byte[] argTypes = methodInfo.getArgumentTypes();
+    List<ParamConfig> pconfig = methodConfig.getParams();
+    
+    for(SymbolicVariable<?> sv : symContext.getSymbolicVars()) {
+      Variable<?> var = sv.getVariable();
+      String varName = var.getName();
+      // Check if this is a reference type variable (ends with ".__ref")
+      if(varName.endsWith(".__ref")) {
+        // Extract the base parameter name (remove ".__ref" suffix)
+        String baseName = varName.substring(0, varName.length() - 6);
+        
+        // Find the corresponding parameter index
+        int paramIndex = -1;
+        for(int i = 0; i < pconfig.size(); i++) {
+          if(pconfig.get(i).getName() != null && pconfig.get(i).getName().equals(baseName)) {
+            paramIndex = i;
+            break;
+          }
+        }
+        
+        // Only include the value if:
+        // 1. The parameter exists and is a reference type
+        // 2. The initial parameter value (ElementInfo) exists
+        // 3. The value exists in initValuation
+        if(paramIndex >= 0 && paramIndex < argTypes.length && 
+           (argTypes[paramIndex] == Types.T_REFERENCE || argTypes[paramIndex] == Types.T_ARRAY) &&
+           paramIndex < initParams.length && initParams[paramIndex] != null &&
+           initValuation.containsValueFor(var)) {
+          Object value = initValuation.getValue(var);
+          refVals.setCastedValue(var, value);
+        }
+      }
+    }
+    
+    return refVals;
+  }
+  
 
   public ConcolicMethodExplorer(ConcolicConfig config, String id, MethodInfo mi) {
     System.out.println("-------------------------------------------------------------");
@@ -228,6 +280,11 @@ public class ConcolicMethodExplorer {
     currValuation = nextValuation;
     nextValuation = null;
     
+    // Update reference type symbolic variable values in constraints tree
+    if (currValuation != null) {
+      updateReferenceTypeSymbolicValues();
+    }
+    
     return (currValuation != null);
   }
   
@@ -322,14 +379,26 @@ public class ConcolicMethodExplorer {
       if(tc == Types.T_REFERENCE || tc == Types.T_ARRAY) {
         int ref = sf.peek(stackIdx);
         ElementInfo ei = heap.get(ref);
-        if(ei != null)
-          symContext.processObject(ei, name, true);
 
+        // If configured, create a symbolic parameter for the reference
         if (anaConf.createRefSymbolicParams()) {
-          Variable<?> refVar = Variable.create(BuiltinTypes.SINT32, name);
+          Variable<?> refVar = Variable.create(BuiltinTypes.SINT32, name + ".__ref");
           SymbolicParam<?> sp = new SymbolicParam<>(refVar, stackIdx);
           symContext.addStackVar(sp);
+          symContext.processPolymorphicObject(ei, name);
+        } else {
+          if (ei != null)
+            symContext.processObject(ei, name, true);
         }
+
+        // if(ei != null)
+        //   symContext.processObject(ei, name, true);
+
+        // if (anaConf.createRefSymbolicParams()) {
+        //   Variable<?> refVar = Variable.create(BuiltinTypes.SINT32, name);
+        //   SymbolicParam<?> sp = new SymbolicParam<>(refVar, stackIdx);
+        //   symContext.addStackVar(sp);
+        // }
       }
       else { // primitive type
         Type<?> t = ConcolicUtil.forTypeCode(tc);
@@ -359,12 +428,27 @@ public class ConcolicMethodExplorer {
     for(SymbolicVariable<?> sv : symContext.getSymbolicVars())
       sv.readInitial(initValuation, sf);
     currValuation = initValuation;
+    
+    // Update reference type symbolic variable values in constraints tree
+    updateReferenceTypeSymbolicValues();
   }
   
   public void prepareReexecution(StackFrame sf) {
     logger.finest("Reexecuting with valuation " + currValuation);
     for(SymbolicVariable<?> sv : symContext.getSymbolicVars())
       sv.apply(currValuation, sf);
+    
+    // Update reference type symbolic variable values in constraints tree
+    updateReferenceTypeSymbolicValues();
+  }
+  
+  /**
+   * Extract reference type symbolic variable values from current valuation
+   * and update them in the constraints tree.
+   */
+  private void updateReferenceTypeSymbolicValues() {
+    Valuation refVals = getReferenceTypeSymbolicValues();
+    constraintsTree.setReferenceTypeSymbolicValues(refVals);
   }
  
   

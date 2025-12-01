@@ -30,7 +30,6 @@ import gov.nasa.jpf.vm.Instruction;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Queue;
 
 public class InternalConstraintsTree {
 
@@ -302,7 +301,10 @@ public class InternalConstraintsTree {
   private final ConcolicValues preset;
   private boolean replay = false;
   
-  private Valuation prev = null;  
+  private Valuation prev = null;
+  
+  // Store current values of reference type symbolic variables (those ending with ".__ref")
+  private Valuation referenceTypeSymbolicValues = null;
  
   
   public InternalConstraintsTree(SolverContext solverCtx, AnalysisConfig anaConf) {
@@ -314,6 +316,16 @@ public class InternalConstraintsTree {
     this.anaConf = anaConf;
     this.explore = anaConf.isExploreInitially();
     this.preset = preset;
+  }
+  
+  /**
+   * Set the current values of reference type symbolic variables.
+   * This should be called whenever the reference type symbolic variable values change.
+   * 
+   * @param refVals Valuation containing reference type symbolic variable values (variables ending with ".__ref")
+   */
+  public void setReferenceTypeSymbolicValues(Valuation refVals) {
+    this.referenceTypeSymbolicValues = refVals;
   }
   
   public void setExplore(boolean explore) {
@@ -462,6 +474,13 @@ public class InternalConstraintsTree {
           continue;
         }
         Valuation val = new Valuation();
+        
+        // Add current values of all reference type symbolic variables to val
+        if(referenceTypeSymbolicValues != null) {
+          val.putAll(referenceTypeSymbolicValues);
+          logger.finer("Added reference type symbolic variable values to valuation");
+        }
+        
         logger.finer("Finding new valuation");
         Result res = solverCtx.solve(val);
         logger.finer("Found: " + res + " : " + val);
