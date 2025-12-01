@@ -69,30 +69,30 @@ class PolymorphicObjectHandler implements SymbolicObjectHandler {
     // First, process all fields like DefaultObjectHandler does
     defaultHandler.annotateObject(ei, name, ctx);
     
-    // Then, create symbolic variables for polymorphic handling
-    try {
-      // Create a symbolic reference variable for the object reference itself
-      // This allows tracking whether the reference is null or points to different instances
-      // and enables instanceof constraints to be collected
-      Variable<Integer> refVar = Variable.create(BuiltinTypes.SINT32, name + ".__ref");
-      SymbolicReference symRef = new SymbolicReference(refVar, ei);
-      // ctx.addSymbolicVar(symRef);
-      logger.finest("Created symbolic reference variable: " + refVar.getName());
+    // // Then, create symbolic variables for polymorphic handling
+    // try {
+    //   // Create a symbolic reference variable for the object reference itself
+    //   // This allows tracking whether the reference is null or points to different instances
+    //   // and enables instanceof constraints to be collected
+    //   Variable<Integer> refVar = Variable.create(BuiltinTypes.SINT32, name + ".__ref");
+    //   SymbolicReference symRef = new SymbolicReference(refVar, ei);
+    //   // ctx.addSymbolicVar(symRef);
+    //   logger.finest("Created symbolic reference variable: " + refVar.getName());
       
-      // Create a symbolic type variable for the object's dynamic type
-      // This allows tracking polymorphic type constraints (the object may be a subclass)
-      Variable<Integer> typeVar = Variable.create(BuiltinTypes.SINT32, name + ".__type");
-      SymbolicType symType = new SymbolicType(typeVar, ei);
-      // ctx.addSymbolicVar(symType);
-      logger.finest("Created symbolic type variable: " + typeVar.getName());
+    //   // Create a symbolic type variable for the object's dynamic type
+    //   // This allows tracking polymorphic type constraints (the object may be a subclass)
+    //   Variable<Integer> typeVar = Variable.create(BuiltinTypes.SINT32, name + ".__type");
+    //   SymbolicType symType = new SymbolicType(typeVar, ei);
+    //   // ctx.addSymbolicVar(symType);
+    //   logger.finest("Created symbolic type variable: " + typeVar.getName());
       
-      // Log information about possible polymorphic types
-      logPolymorphicInfo(ci, name);
+    //   // Log information about possible polymorphic types
+    //   logPolymorphicInfo(ci, name);
       
-    } catch(Exception ex) {
-      // Be conservative: if variable creation fails, do not break execution
-      logger.finest("Could not create polymorphic symbolic variables for " + name + ": " + ex.getMessage());
-    }
+    // } catch(Exception ex) {
+    //   // Be conservative: if variable creation fails, do not break execution
+    //   logger.finest("Could not create polymorphic symbolic variables for " + name + ": " + ex.getMessage());
+    // }
   }
   
   /**

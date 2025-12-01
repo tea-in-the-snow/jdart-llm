@@ -15,35 +15,66 @@
  */
 package gov.nasa.jpf.jdart.bytecode;
 
+import gov.nasa.jpf.constraints.api.Expression;
+import gov.nasa.jpf.constraints.expressions.IsNullExpression;
+import gov.nasa.jpf.constraints.expressions.Negation;
 import gov.nasa.jpf.jdart.ConcolicInstructionFactory;
+import gov.nasa.jpf.jdart.ConcolicMethodExplorer;
 import gov.nasa.jpf.vm.Instruction;
 import gov.nasa.jpf.vm.StackFrame;
 import gov.nasa.jpf.vm.ThreadInfo;
-
 
 // we should factor out some of the code and put it in a parent class for all "if statements"
 //TODO: to review: approximation
 
 public class IFNULL extends gov.nasa.jpf.jvm.bytecode.IFNULL {
 
-  public IFNULL (int targetPc) {
-	    super(targetPc);
-	  }
+  public IFNULL(int targetPc) {
+    super(targetPc);
+  }
 
   @Override
-	public Instruction execute (ThreadInfo ti) {
-		StackFrame sf = ti.getTopFrame();
-    
-    if(sf.getOperandAttr() == null) {
-			return super.execute(ti);
-		}
+  @SuppressWarnings("unchecked")
+  public Instruction execute(ThreadInfo ti) {
+    ConcolicMethodExplorer analysis = ConcolicMethodExplorer.getCurrentAnalysis(ti);
+    StackFrame sf = ti.getModifiableTopFrame();
 
-    // the condition is symbolic
-		ti.popFrame();
+    // No concolic analysis or no symbolic attribute => fall back to default behavior
+    Expression<?> symb = (Expression<?>) sf.getOperandAttr();
+    if (analysis == null || symb == null) {
+      return super.execute(ti);
+    }
 
-    if (ConcolicInstructionFactory.DEBUG) ConcolicInstructionFactory.logger.finest("Execute IFNULL. " + sf.getOperandAttr());
-    conditionValue = true;
-    
-    return getNext(ti);
-	}
+    System.out.println("**********************************************************");
+    System.out.println("Execute IFNULL: symb=" + symb);
+    System.out.println("**********************************************************");
+
+    int ref = sf.peek();
+    sf.pop();
+
+    boolean sat = (ref == 0); // IFNULL branches if reference is null (0)
+
+    Expression<Boolean>[] constraints = null;
+    if (analysis.needsDecisions()) {
+      constraints = new Expression[2];
+      Expression<Boolean> isNullExpr = new IsNullExpression(symb);
+      // Branch 0: taken when condition (ref == null) is true
+      constraints[0] = isNullExpr;
+      // Branch 1: not taken => ref != null
+      constraints[1] = new Negation(isNullExpr);
+    }
+
+    int branchIdx = sat ? 0 : 1;
+    analysis.decision(ti, this, branchIdx, constraints);
+
+    Instruction next = sat ? getTarget() : getNext(ti);
+
+    if (ConcolicInstructionFactory.DEBUG) {
+      ConcolicInstructionFactory.logger.finest(
+          "Execute IFNULL: ref=" + ref + " [" + symb + "], symb. result [" + sat + "]");
+    }
+
+    conditionValue = (next == this.target);
+    return next;
+  }
 }
