@@ -18,11 +18,11 @@ package gov.nasa.jpf.jdart.objects;
 import gov.nasa.jpf.JPF;
 import gov.nasa.jpf.constraints.api.Variable;
 import gov.nasa.jpf.constraints.types.BuiltinTypes;
-import gov.nasa.jpf.jdart.SymbolicReference;
-import gov.nasa.jpf.jdart.SymbolicType;
 import gov.nasa.jpf.util.JPFLogger;
 import gov.nasa.jpf.vm.ClassInfo;
 import gov.nasa.jpf.vm.ElementInfo;
+import gov.nasa.jpf.vm.FieldInfo;
+import gov.nasa.jpf.vm.StaticElementInfo;
 
 /**
  * Polymorphic symbolic object handler that considers objects may be of different types
@@ -66,8 +66,17 @@ class PolymorphicObjectHandler implements SymbolicObjectHandler {
     ClassInfo ci = ei.getClassInfo();
     logger.finest("Annotating polymorphic object of class " + ci.getName() + " with name " + name);
     
-    // First, process all fields like DefaultObjectHandler does
-    defaultHandler.annotateObject(ei, name, ctx);
+    // defaultHandler.annotateObject(ei, name, ctx);
+
+    logger.finest("Annotating object of class " + ci.getName());
+    FieldInfo[] fis;
+    if(ei instanceof StaticElementInfo)
+      fis = ci.getDeclaredStaticFields();
+    else
+      fis = ci.getDeclaredInstanceFields();
+    for(FieldInfo fi : fis) {
+      ctx.processPolymorphicField(ei, fi, name + "." + fi.getName());
+    }
     
     // // Then, create symbolic variables for polymorphic handling
     // try {

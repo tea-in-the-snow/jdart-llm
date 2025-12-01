@@ -31,8 +31,8 @@ import gov.nasa.jpf.vm.StackFrame;
  * @param <T>
  */
 public class SymbolicField<T> extends SymbolicVariable<T> {
-  private final ElementInfo elementInfo;
-  private final FieldInfo fieldInfo;
+  protected final ElementInfo elementInfo;
+  protected final FieldInfo fieldInfo;
   
   public static <T> SymbolicField<T> create(Variable<T> variable, ElementInfo elementInfo, FieldInfo fieldInfo) {
     return new SymbolicField<T>(variable, elementInfo, fieldInfo);

@@ -16,8 +16,10 @@
 package gov.nasa.jpf.jdart.objects;
 
 import gov.nasa.jpf.constraints.api.Variable;
+import gov.nasa.jpf.constraints.types.BuiltinTypes;
 import gov.nasa.jpf.constraints.types.Type;
 import gov.nasa.jpf.jdart.ConcolicUtil;
+import gov.nasa.jpf.jdart.SymbolicReferenceField;
 import gov.nasa.jpf.jdart.SymbolicArrayElem;
 import gov.nasa.jpf.jdart.SymbolicField;
 import gov.nasa.jpf.jdart.SymbolicParam;
@@ -197,6 +199,26 @@ public class SymbolicObjectsContext {
     SymbolicObjectHandler hndlr = new PolymorphicObjectHandler();
     hndlr.initialize(ci);
     hndlr.annotateObject(ei, name, this);
+  }
+
+  public void processPolymorphicField(ElementInfo ei, FieldInfo fi, String name) {
+    logger.finest("processing polymorphic field " + name);
+    boolean force = isSymbolicField(fi);
+    if(fi.isReference()) {
+      Variable<Integer> refVar = Variable.create(BuiltinTypes.SINT32, name + ".__ref");
+      SymbolicReferenceField sf = new SymbolicReferenceField(refVar, ei, fi);
+      symbolicVars.put(name, sf);
+      // ei.setFieldAttr(fi, refVar);
+      int ref = ei.getReferenceField(fi);
+      ElementInfo elem = heap.get(ref);
+      if(elem == null)
+        return;
+      // For reference-typed fields, process the referenced object polymorphically
+      processPolymorphicObject(elem, name);
+    }
+    else {
+      processPrimitiveField(ei, fi, name, force);
+    }
   }
   
   public void processField(ElementInfo ei, FieldInfo fi, String name) {
