@@ -1,8 +1,16 @@
 # LLM Constraint Solver Service
 
-Minimal FastAPI service that uses LangChain + OpenAI to reason about high-level constraints.
+FastAPI service that uses LangChain + LLM (OpenAI/DeepSeek) to reason about high-level Java constraints.
 
-Quick start:
+## Features
+
+- **Constraint Solving**: Determines satisfiability (SAT/UNSAT/UNKNOWN) of Java constraints
+- **Valuation Generation**: Produces candidate valuations that satisfy constraints
+- **Context Support**: Reads `ctx.md` file for reference information
+- **Logging**: Automatically logs all requests/responses to markdown files in `log/` directory
+- **Flexible LLM Support**: Supports OpenAI and DeepSeek (or any compatible API) via configuration
+
+## Quick Start
 
 1. Create a Python virtualenv and install dependencies:
 
@@ -12,24 +20,124 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-2. Set your OpenAI API key:
+2. Configure the service by editing `config.py`:
 
-```bash
-export OPENAI_API_KEY="sk-..."
+```python
+OPENAI_API_KEY = "sk-..."  # Your API key
+LLM_MODEL = "deepseek-chat"  # or "gpt-4", "gpt-3.5-turbo", etc.
+BASE_URL = "https://api.deepseek.com/v1"  # Optional: API endpoint URL
 ```
 
-3. Run the service:
+3. (Optional) Add context information by creating or editing `ctx.md`:
 
+The service will automatically read `ctx.md` and include it as reference information in prompts.
+
+4. Run the service (make sure you're in the `llm_service` directory):
+
+```bash
+cd llm_service
+python -m uvicorn app:app --host 0.0.0.0 --port 8000
+```
+
+Alternatively, if you're already in the `llm_service` directory:
 ```bash
 uvicorn app:app --host 0.0.0.0 --port 8000
 ```
 
-4. Example request (curl):
+## API Usage
 
-```bash
-curl -X POST http://localhost:8000/solve -H "Content-Type: application/json" -d '{"constraints":["x > 0","x < 10"], "valuation": {"x": 5}}'
+### Endpoint: `POST /solve`
+
+Accepts JSON request with constraints and optional base valuation.
+
+**Request Format:**
+```json
+{
+  "constraints": ["constraint1", "constraint2", ...],
+  "valuation": {"key": "value", ...},  // Optional: base valuation
+  "max_tokens": 512,  // Optional: max tokens for LLM response (default: 512)
+  "temperature": 0.0  // Optional: temperature for LLM (default: 0.0)
+}
 ```
 
-Notes:
-- This is a template. You should add robust parsing, verification (re-check candidate valuations with a symbolic solver), retries, caching, and rate limiting for production use.
-- The service requires `OPENAI_API_KEY`. Optionally set `LLM_MODEL` to choose another model supported by LangChain/OpenAI.
+**Response Format:**
+```json
+{
+  "result": "SAT|UNSAT|UNKNOWN",
+  "valuation": [{"key": "value", ...}],  // Array of valuation objects (only if SAT)
+  "raw": "original LLM text"  // Optional: raw response if parsing failed
+}
+```
+
+**Example Request:**
+```bash
+curl -X POST http://localhost:8000/solve \
+  -H "Content-Type: application/json" \
+  -d '{
+    "constraints": [
+      "obj.__ref instanceof LCar;",
+      "obj.wheels_num == 4",
+      "obj.highest_speed > 200"
+    ],
+    "valuation": {},
+    "max_tokens": 512,
+    "temperature": 0.0
+  }'
+```
+
+**Example Response:**
+```json
+{
+  "result": "SAT",
+  "valuation": [
+    {
+      "obj.__ref": "LCar;",
+      "obj.wheels_num": 4,
+      "obj.highest_speed": 250
+    }
+  ]
+}
+```
+
+## Important Notes
+
+### Valuation Format
+
+- Valuations are returned as an **array of objects**, where each object represents a symbolic object's properties
+- Keys use **flat dot notation** (e.g., `"obj.__ref"`, `"x.field"`) - nested objects are automatically flattened
+- Type constraints use the format: `"obj.__ref": "LCar;"` where the value is the Java type descriptor
+
+### Constraint Types
+
+The service handles various Java constraint types:
+- **Type constraints**: `"x instanceof Ljava/util/List;"`
+- **Null checks**: `"x == null"` or `"x != null"`
+- **Field access**: `"x.field"` (requires x to be non-null)
+- **Numeric constraints**: comparisons, arithmetic operations
+
+### Logging
+
+All requests and responses are automatically logged to `log/` directory:
+- Logs are organized by date and session (e.g., `log/2025-01-15-1/`)
+- Each log file includes:
+  - Request/response JSON
+  - Human message sent to LLM
+  - LLM response message
+  - Timestamps and duration
+
+### Configuration
+
+Configuration is managed via `config.py`:
+- `OPENAI_API_KEY`: Your API key (required)
+- `LLM_MODEL`: Model name (e.g., "deepseek-chat", "gpt-4", "gpt-3.5-turbo")
+- `BASE_URL`: Optional API endpoint URL (for custom providers or proxies)
+
+### Production Considerations
+
+This is a template service. For production use, consider adding:
+- Robust parsing and validation
+- Verification steps (re-check candidate valuations with a symbolic solver)
+- Retry logic and error handling
+- Caching for repeated queries
+- Rate limiting
+- Authentication/authorization
