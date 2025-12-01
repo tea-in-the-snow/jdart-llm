@@ -45,10 +45,6 @@ public class IFNONNULL extends gov.nasa.jpf.jvm.bytecode.IFNONNULL {
       return super.execute(ti);
     }
 
-    System.out.println("**********************************************************");
-    System.out.println("Execute IFNONNULL: symb=" + symb);
-    System.out.println("**********************************************************");
-
     int ref = sf.peek();
     sf.pop();
 
