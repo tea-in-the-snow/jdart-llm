@@ -33,3 +33,6 @@ Thumbs.db
 *.tmp
 *.temp
 *~
+
+# pychache
+/llm_service/pycache/
