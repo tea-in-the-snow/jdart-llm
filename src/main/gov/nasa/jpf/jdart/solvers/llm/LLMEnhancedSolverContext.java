@@ -45,14 +45,21 @@ public class LLMEnhancedSolverContext extends SolverContext {
    * new, empty list on the stack. pop(n) removes the top n scopes.
    */
   private final Deque<List<Expression<Boolean>>> highLevelStack = new ArrayDeque<>();
-  private final Deque<Map<String, Variable<?>>> hlFreeVarsStack
-          = new ArrayDeque<Map<String, Variable<?>>>();
+  private final Deque<Map<String, Variable<?>>> hlFreeVarsStack = new ArrayDeque<Map<String, Variable<?>>>();
 
   public LLMEnhancedSolverContext(SolverContext baseSolverContext) {
     this.bashSolverContext = baseSolverContext;
     // initialize base scope for high-level constraints
-    this.highLevelStack.push(new ArrayList<>());
+    // this.highLevelStack.push(new ArrayList<>());
     this.hlFreeVarsStack.push(new HashMap<String, Variable<?>>());
+  }
+
+  private void printHighLevelStack() {
+    List<Expression<Boolean>> hlExpressions = highLevelStack.stream()
+        .flatMap(List::stream)
+        .collect(Collectors.toList());
+
+    System.out.println("hlExpressions: " + hlExpressions);
   }
 
   @Override
@@ -61,24 +68,99 @@ public class LLMEnhancedSolverContext extends SolverContext {
     highLevelStack.push(new ArrayList<>());
     Map<String, Variable<?>> fvMap = hlFreeVarsStack.peek();
     hlFreeVarsStack.push(new HashMap<String, Variable<?>>(fvMap));
+    System.out.println("----------------------------------------------------------");
+    System.out.println("Pushed new high-level constraints");
+    printHighLevelStack();
+    System.out.println("----------------------------------------------------------");
   }
 
   @Override
   public void pop(int n) {
+    System.out.println("----------------------------------------------------------");
     bashSolverContext.pop(n);
-    for (int i = 0; i < n && !highLevelStack.isEmpty(); i++) {
+    for (int i = 0; i < n; i++) {
+      // for (int j = 0; j < highLevelStack.peek().size(); j++) {
+      //   System.out.println("high-level constraint " + j + ": " + highLevelStack.peek().get(j));
+      // }
       highLevelStack.pop();
+      System.out.println("Popped high-level constraint " + i);
+      // hlFreeVarsStack.pop();
     }
-    if (highLevelStack.isEmpty()) {
-      // ensure there is always at least one scope
-      highLevelStack.push(new ArrayList<>());
+    System.out.println("Popped " + n + " high-level constraints");
+    printHighLevelStack();
+    System.out.println("----------------------------------------------------------");
+  }
+
+  @Override
+  public void add(List<Expression<Boolean>> expressions) {
+    if (expressions == null || expressions.isEmpty()) {
+      return;
     }
-    hlFreeVarsStack.pop();
+
+    List<Expression<Boolean>> normal = new ArrayList<>();
+    List<Expression<Boolean>> high = new ArrayList<>();
+
+    Map<String, Variable<?>> fvMap = hlFreeVarsStack.peek();
+
+    for (Expression<Boolean> e : expressions) {
+      if (e != null && containsHighLevel(e)) {
+        high.add(e);
+        Set<Variable<?>> fvs = ExpressionUtil.freeVariables(e);
+        for (Variable<?> v : fvs) {
+          fvMap.put(v.getName(), v);
+        }
+      } else {
+        normal.add(e);
+      }
+      // Set<Variable<?>> fvs = ExpressionUtil.freeVariables(e);
+      // for (Variable<?> v : fvs) {
+      // fvMap.put(v.getName(), v);
+      // }
+
+    }
+
+    // Forward normal constraints to the base solver immediately
+    if (!normal.isEmpty()) {
+      bashSolverContext.add(normal);
+    }
+
+    // Store high-level constraints in the current high-level scope
+    if (!high.isEmpty()) {
+      List<Expression<Boolean>> current = highLevelStack.peek();
+      // if (current == null) {
+      // current = new ArrayList<>();
+      // highLevelStack.push(current);
+      // }
+      current.addAll(high);
+    }
+    System.out.println("----------------------------------------------------------");
+    System.out.println("Added " + expressions.size() + " expressions");
+    for (int i = 0; i < expressions.size(); i++) {
+      System.out.println("expression " + i + ": " + expressions.get(i));
+    }
+    printHighLevelStack();
+    System.out.println("----------------------------------------------------------");
+  }
+
+  @Override
+  public void dispose() {
+    highLevelStack.clear();
+    bashSolverContext.dispose();
+    hlFreeVarsStack.clear();
   }
 
   @Override
   public Result solve(Valuation val) {
-    // If there are no high-level constraints, delegate to base solver
+    // System.out.println("----------------------------------------------------------");
+    // System.out.println("Solving with " + highLevelStack.size() + " high-level
+    // constraints");
+    // for (int i = 0; i < highLevelStack.size(); i++) {
+    // System.out.println("high-level constraint " + i + ": " +
+    // highLevelStack.get(i));
+    // }
+    // System.out.println("----------------------------------------------------------");
+
+    // If there are no high-level constraints in any scope, delegate to base solver.
     boolean hasHighLevel = highLevelStack.stream().anyMatch(list -> !list.isEmpty());
     if (!hasHighLevel) {
       return bashSolverContext.solve(val);
@@ -93,10 +175,14 @@ public class LLMEnhancedSolverContext extends SolverContext {
       return baseResult;
     }
 
-    // Base constraints are SAT; now try to solve high-level constraints
     List<Expression<Boolean>> hlExpressions = highLevelStack.stream()
         .flatMap(List::stream)
         .collect(Collectors.toList());
+
+    System.out.println("----------------------------------------------------------");
+    System.out.println("Solving with " + hlExpressions.size() + " high-level constraints");
+    System.out.println("hlExpressions: " + hlExpressions);
+    System.out.println("----------------------------------------------------------");
 
     if (hlExpressions.isEmpty()) {
       return baseResult;
@@ -104,7 +190,7 @@ public class LLMEnhancedSolverContext extends SolverContext {
 
     // Get solver configuration
     SolverConfig config = getSolverConfiguration();
-    
+
     // Build JSON payload
     String payload = buildJsonPayload(hlExpressions, val);
 
@@ -139,7 +225,8 @@ public class LLMEnhancedSolverContext extends SolverContext {
 
   /**
    * Get solver configuration from environment variables.
-   * The service URL can be configured via LLM_SOLVER_URL (default: http://127.0.0.1:8000/solve).
+   * The service URL can be configured via LLM_SOLVER_URL (default:
+   * http://127.0.0.1:8000/solve).
    * The request timeout can be configured via LLM_SOLVER_TIMEOUT (default: 10s).
    */
   private SolverConfig getSolverConfiguration() {
@@ -154,7 +241,8 @@ public class LLMEnhancedSolverContext extends SolverContext {
       try {
         timeoutSeconds = Integer.parseInt(timeoutEnv);
       } catch (NumberFormatException nfe) {
-        System.err.println("Invalid LLM_SOLVER_TIMEOUT value '" + timeoutEnv + "', using default " + timeoutSeconds + "s");
+        System.err
+            .println("Invalid LLM_SOLVER_TIMEOUT value '" + timeoutEnv + "', using default " + timeoutSeconds + "s");
       }
     }
 
@@ -169,14 +257,8 @@ public class LLMEnhancedSolverContext extends SolverContext {
     sb.append('{');
     sb.append("\"constraints\":[");
 
-    // Use only the current (top) high-level scope to avoid mixing constraints
-    // from different exploration branches.
-    List<Expression<Boolean>> scopeExprs = highLevelStack.peek();
-    if (scopeExprs == null) {
-      scopeExprs = hlExpressions;
-    }
-
-    String constraintsJson = scopeExprs.stream()
+    // Use all provided high-level expressions (from all active scopes).
+    String constraintsJson = hlExpressions.stream()
         .map(Object::toString)
         .map(LLMEnhancedSolverContext::escapeJson)
         .map(s -> "\"" + s + "\"")
@@ -187,7 +269,8 @@ public class LLMEnhancedSolverContext extends SolverContext {
     if (val == null) {
       sb.append("null");
     } else {
-      // Convert Valuation to JSON object format: {"varName1": "value1", "varName2": "value2", ...}
+      // Convert Valuation to JSON object format: {"varName1": "value1", "varName2":
+      // "value2", ...}
       sb.append('{');
       boolean first = true;
       for (ValuationEntry<?> entry : val.entries()) {
@@ -271,7 +354,8 @@ public class LLMEnhancedSolverContext extends SolverContext {
    * Returns the appropriate Result based on the response.
    */
   private Result parseLlmResponse(String body, Valuation val) {
-    // Simple, dependency-free parsing: look for "result":"SAT"/"UNSAT"/"UNKNOWN" (case-insensitive).
+    // Simple, dependency-free parsing: look for "result":"SAT"/"UNSAT"/"UNKNOWN"
+    // (case-insensitive).
     String normalized = body.toUpperCase();
     if (normalized.contains("\"RESULT\"") && normalized.contains("SAT")) {
       // parse the valuation array from the body
@@ -284,7 +368,7 @@ public class LLMEnhancedSolverContext extends SolverContext {
         updateValuationFromLlmResponse(llmValuationArray, val);
       }
       System.out.println("=================================================\n");
-      
+
       return Result.SAT;
     }
     if (normalized.contains("\"RESULT\"") && normalized.contains("UNSAT")) {
@@ -304,17 +388,17 @@ public class LLMEnhancedSolverContext extends SolverContext {
   private void updateValuationFromLlmResponse(JsonArray llmValuationArray, Valuation val) {
     // Build a map from variable name to Variable object
     Map<String, Variable<?>> varNameToVar = buildVariableNameMap();
-    
+
     // Iterate through each object in the valuation array
     for (int i = 0; i < llmValuationArray.size(); i++) {
       JsonObject valuationObj = llmValuationArray.get(i).getAsJsonObject();
-      
+
       // Iterate through each key-value pair in the object
       for (Map.Entry<String, JsonElement> entry : valuationObj.entrySet()) {
         String varName = entry.getKey();
         System.out.println("varName: " + varName);
         JsonElement valueElement = entry.getValue();
-        
+
         // Find the corresponding Variable object
         Variable<?> var = varNameToVar.get(varName);
         if (var != null) {
@@ -332,13 +416,14 @@ public class LLMEnhancedSolverContext extends SolverContext {
    */
   private Map<String, Variable<?>> buildVariableNameMap() {
     Map<String, Variable<?>> varNameToVar = new HashMap<String, Variable<?>>();
-    
-    // Add free variables from high-level constraints (in case they're not in the valuation yet)
+
+    // Add free variables from high-level constraints (in case they're not in the
+    // valuation yet)
     Map<String, Variable<?>> hlFreeVars = hlFreeVarsStack.peek();
     if (hlFreeVars != null) {
       varNameToVar.putAll(hlFreeVars);
     }
-    
+
     return varNameToVar;
   }
 
@@ -356,7 +441,7 @@ public class LLMEnhancedSolverContext extends SolverContext {
       // For complex types, convert to JSON string
       valueStr = valueElement.toString();
     }
-    
+
     // Update the valuation using setCastedValue which handles type conversion
     try {
       // Special case: the LLM may use the string "null" as a type signature/value
@@ -370,11 +455,11 @@ public class LLMEnhancedSolverContext extends SolverContext {
 
       // Check if the value is a type signature (object reference case)
       // Type signatures have format: L...; (e.g., Ljava/lang/Object;)
-      boolean isTypeSignature = valueStr != null && 
-                                valueStr.length() >= 3 && 
-                                valueStr.startsWith("L") && 
-                                valueStr.endsWith(";");
-      
+      boolean isTypeSignature = valueStr != null &&
+          valueStr.length() >= 3 &&
+          valueStr.startsWith("L") &&
+          valueStr.endsWith(";");
+
       if (isTypeSignature) {
         createObjectFromTypeSignature(valueStr, var, varName, val);
       }
@@ -402,27 +487,28 @@ public class LLMEnhancedSolverContext extends SolverContext {
     // Check if the variable already has a value in the valuation
     Object currentValue = val.getValue(var);
     boolean needNewObject = true;
-    
+
     if (currentValue != null) {
       // If current value is an object reference (int), check its type
       if (currentValue instanceof Integer) {
         int currentObjRef = (Integer) currentValue;
         Heap heap = vm.getHeap();
         ElementInfo currentObj = heap.get(currentObjRef);
-        
+
         if (currentObj != null && !currentObj.isNull()) {
           // Get the class name of the current object
           String currentClassName = currentObj.getClassInfo().getName();
-          
+
           // If types match, keep the existing object reference
           if (currentClassName.equals(className)) {
             needNewObject = false;
-            System.out.println("Variable " + varName + " already has matching type " + className + ", keeping existing object reference " + currentObjRef);
+            System.out.println("Variable " + varName + " already has matching type " + className
+                + ", keeping existing object reference " + currentObjRef);
           }
         }
       }
     }
-    
+
     // Only create a new object if types don't match or no value exists
     if (needNewObject) {
       // Get ClassInfo from class name using the system class loader
@@ -431,14 +517,16 @@ public class LLMEnhancedSolverContext extends SolverContext {
       Heap heap = vm.getHeap();
       ThreadInfo ti = vm.getCurrentThread();
       ElementInfo newObjectEi = heap.newObject(ci, ti);
-      
-      // Get the object reference (an int value representing the object ID in the heap)
+
+      // Get the object reference (an int value representing the object ID in the
+      // heap)
       int objRef = newObjectEi.getObjectRef();
-      
+
       // Store the object reference in the valuation
       // Use setCastedValue to properly handle type conversion
       val.setCastedValue(var, objRef);
-      System.out.println("Updated variable " + varName + " = " + objRef + " (object reference for type " + typeSignature + ")");
+      System.out.println(
+          "Updated variable " + varName + " = " + objRef + " (object reference for type " + typeSignature + ")");
     }
   }
 
@@ -468,50 +556,4 @@ public class LLMEnhancedSolverContext extends SolverContext {
     return false;
   }
 
-  @Override
-  public void add(List<Expression<Boolean>> expressions) {
-    if (expressions == null || expressions.isEmpty()) {
-      return;
-    }
-
-    List<Expression<Boolean>> normal = new ArrayList<>();
-    List<Expression<Boolean>> high = new ArrayList<>();
-
-    Map<String, Variable<?>> fvMap = hlFreeVarsStack.peek();
-
-    for (Expression<Boolean> e : expressions) {
-      if (e != null && containsHighLevel(e)) {
-        high.add(e);
-      } else {
-        normal.add(e);
-      }
-      Set<Variable<?>> fvs = ExpressionUtil.freeVariables(e);
-      for (Variable<?> v : fvs) {
-          fvMap.put(v.getName(), v);
-      }
-      
-    }
-
-    // Forward normal constraints to the base solver immediately
-    if (!normal.isEmpty()) {
-      bashSolverContext.add(normal);
-    }
-
-    // Store high-level constraints in the current high-level scope
-    if (!high.isEmpty()) {
-      List<Expression<Boolean>> current = highLevelStack.peek();
-      if (current == null) {
-        current = new ArrayList<>();
-        highLevelStack.push(current);
-      }
-      current.addAll(high);
-    }
-  }
-
-  @Override
-  public void dispose() {
-    highLevelStack.clear();
-    bashSolverContext.dispose();
-    hlFreeVarsStack.clear();
-  }
 }
