@@ -303,7 +303,7 @@ public class InternalConstraintsTree {
   
   private Valuation prev = null;
   
-  // Store current values of reference type symbolic variables (those ending with ".__ref")
+  // Store current values of reference type symbolic variables (those ending with ".<ref>")
   private Valuation referenceTypeSymbolicValues = null;
  
   
@@ -322,7 +322,7 @@ public class InternalConstraintsTree {
    * Set the current values of reference type symbolic variables.
    * This should be called whenever the reference type symbolic variable values change.
    * 
-   * @param refVals Valuation containing reference type symbolic variable values (variables ending with ".__ref")
+   * @param refVals Valuation containing reference type symbolic variable values (variables ending with ".<ref>")
    */
   public void setReferenceTypeSymbolicValues(Valuation refVals) {
     this.referenceTypeSymbolicValues = refVals;

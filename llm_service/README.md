@@ -75,7 +75,7 @@ curl -X POST http://localhost:8000/solve \
   -H "Content-Type: application/json" \
   -d '{
     "constraints": [
-      "obj.__ref instanceof LCar;",
+      "obj.<ref> instanceof LCar;",
       "obj.wheels_num == 4",
       "obj.highest_speed > 200"
     ],
@@ -91,7 +91,7 @@ curl -X POST http://localhost:8000/solve \
   "result": "SAT",
   "valuation": [
     {
-      "obj.__ref": "LCar;",
+      "obj.<ref>": "LCar;",
       "obj.wheels_num": 4,
       "obj.highest_speed": 250
     }
@@ -104,8 +104,8 @@ curl -X POST http://localhost:8000/solve \
 ### Valuation Format
 
 - Valuations are returned as an **array of objects**, where each object represents a symbolic object's properties
-- Keys use **flat dot notation** (e.g., `"obj.__ref"`, `"x.field"`) - nested objects are automatically flattened
-- Type constraints use the format: `"obj.__ref": "LCar;"` where the value is the Java type descriptor
+- Keys use **flat dot notation** (e.g., `"obj.<ref>"`, `"x.field"`) - nested objects are automatically flattened
+- Type constraints use the format: `"obj.<ref>": "LCar;"` where the value is the Java type descriptor
 
 ### Constraint Types
 

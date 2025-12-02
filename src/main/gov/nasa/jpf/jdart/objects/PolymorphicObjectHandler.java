@@ -83,7 +83,7 @@ class PolymorphicObjectHandler implements SymbolicObjectHandler {
     //   // Create a symbolic reference variable for the object reference itself
     //   // This allows tracking whether the reference is null or points to different instances
     //   // and enables instanceof constraints to be collected
-    //   Variable<Integer> refVar = Variable.create(BuiltinTypes.SINT32, name + ".__ref");
+    //   Variable<Integer> refVar = Variable.create(BuiltinTypes.SINT32, name + ".<ref>");
     //   SymbolicReference symRef = new SymbolicReference(refVar, ei);
     //   // ctx.addSymbolicVar(symRef);
     //   logger.finest("Created symbolic reference variable: " + refVar.getName());

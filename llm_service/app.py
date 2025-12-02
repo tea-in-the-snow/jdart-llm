@@ -30,7 +30,7 @@ app = FastAPI()
 def flatten_valuation(valuation: Dict[str, Any], prefix: str = "") -> Dict[str, Any]:
     """
     Flatten a nested valuation dictionary into flat keys with dot notation.
-    Example: {"obj": {"__ref": "LCar;"}} -> {"obj.__ref": "LCar;"}
+    Example: {"obj": {"<ref>": "LCar;"}} -> {"obj.<ref>": "LCar;"}
     """
     if not isinstance(valuation, dict):
         return valuation
@@ -87,23 +87,23 @@ async def solve(req: SolveRequest):
         "   - Numeric constraints: comparisons, arithmetic operations\n\n"
         "2. The base valuation is only a starting point, not fixed truth. You are allowed (and expected) to MODIFY it\n"
         "   as needed to satisfy the constraints, as long as you keep changes minimal and consistent.\n"
-        "   Example: if the constraint is \"('cell.__ref' == null)\" and the base valuation contains\n"
-        "   \"cell.__ref\": 458, you SHOULD treat this as SAT by changing it to \"cell.__ref\": \"null\" in the result.\n\n"
+        "   Example: if the constraint is \"('cell.<ref>' == null)\" and the base valuation contains\n"
+        "   \"cell.<ref>\": 458, you SHOULD treat this as SAT by changing it to \"cell.<ref>\": \"null\" in the result.\n\n"
         "3. For type constraints (instanceof), assign the reference variable appropriately:\n"
-        "   - If the constraint is \"obj.__ref instanceof LCar;\", assign \"obj.__ref\" as a flat key (not nested) to the type string \"LCar;\" in the valuation\n"
-        "   - Use flat keys with dot notation: {\"obj.__ref\": \"LCar;\"} NOT nested objects: {\"obj\": {\"__ref\": \"LCar;\"}}\n"
+        "   - If the constraint is \"obj.<ref> instanceof LCar;\", assign \"obj.<ref>\" as a flat key (not nested) to the type string \"LCar;\" in the valuation\n"
+        "   - Use flat keys with dot notation: {\"obj.<ref>\": \"LCar;\"} NOT nested objects: {\"obj\": {\"<ref>\": \"LCar;\"}}\n"
         "   - Ensure the assigned type is compatible with the constraint\n\n"
         "4. For null constraints on reference variables, assign the string \"null\" explicitly:\n"
-        "   - If there is a constraint like \"cell.__ref == null\", then in the valuation return \"cell.__ref\": \"null\"\n"
-        "   - More generally, for any \"<name>.__ref == null\" constraint, set \"<name>.__ref\" to the string \"null\" in JSON\n\n"
+        "   - If there is a constraint like \"cell.<ref> == null\", then in the valuation return \"cell.<ref>\": \"null\"\n"
+        "   - More generally, for any \"<name>.<ref> == null\" constraint, set \"<name>.<ref>\" to the string \"null\" in JSON\n\n"
         "5. Build upon the base valuation if provided, extending or modifying it as needed to satisfy all constraints.\n\n"
         "6. Output format: Respond ONLY with valid JSON, no additional text. Use one of these formats:\n"
         "   - {\"result\":\"SAT\", \"valuation\": [{...}, {...}]} when constraints are satisfiable\n"
         "     The valuation should be an ARRAY of objects, where each object represents a symbolic object's valuation.\n"
-        "     Example: \"valuation\": [{\"obj1.__ref\": \"Ljava/lang/Object;\"}, {\"obj2.__ref\": \"Ljava/lang/Object;\"}]\n"
+        "     Example: \"valuation\": [{\"obj1.<ref>\": \"Ljava/lang/Object;\"}, {\"obj2.<ref>\": \"Ljava/lang/Object;\"}]\n"
         "   - {\"result\":\"UNSAT\"} when constraints are unsatisfiable even after adjusting the valuation\n"
         "   - {\"result\":\"UNKNOWN\", \"raw\": \"explanation\"} when you cannot determine satisfiability\n\n"
-        "7. The valuation array should contain objects with FLAT keys using dot notation (e.g., \"obj.__ref\", \"x.field\") mapping to their values.\n"
+        "7. The valuation array should contain objects with FLAT keys using dot notation (e.g., \"obj.<ref>\", \"x.field\") mapping to their values.\n"
         "   IMPORTANT: Do NOT use nested objects in the valuation. Always flatten nested properties into dot-notation keys.\n"
         "   Each element in the valuation array should be a separate object representing one symbolic object's properties.")
 

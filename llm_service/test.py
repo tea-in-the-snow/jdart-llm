@@ -11,7 +11,7 @@ def test_instanceof():
     # Test request data
     request_data = {
         "constraints": [
-            "obj.__ref instanceof LCar;"
+            "obj.<ref> instanceof LCar;"
         ],
         "valuation": None,
         "max_tokens": 256,
