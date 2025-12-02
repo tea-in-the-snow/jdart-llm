@@ -29,6 +29,7 @@ import gov.nasa.jpf.constraints.api.Valuation;
 import gov.nasa.jpf.constraints.api.ValuationEntry;
 import gov.nasa.jpf.constraints.api.Variable;
 import gov.nasa.jpf.constraints.util.ExpressionUtil;
+import gov.nasa.jpf.jdart.ConcolicMethodExplorer;
 import gov.nasa.jpf.vm.ClassInfo;
 import gov.nasa.jpf.vm.ClassLoaderInfo;
 import gov.nasa.jpf.vm.ElementInfo;
@@ -515,9 +516,47 @@ public class LLMEnhancedSolverContext extends SolverContext {
       val.setCastedValue(var, objRef);
       System.out.println(
           "Updated variable " + varName + " = " + objRef + " (object reference for type " + typeSignature + ")");
+      
+      // Symbolize the new object to track and collect constraints on its fields
+      symbolizeNewObject(newObjectEi, varName, ti);
     }
   }
 
+  /**
+   * Symbolize a newly created object to track and collect constraints on its fields.
+   * This method retrieves the current symbolic execution context and processes the object
+   * polymorphically to handle different runtime types.
+   */
+  private void symbolizeNewObject(ElementInfo newObjectEi, String varName, ThreadInfo ti) {
+    try {
+      // Get the current concolic method explorer from the thread
+      ConcolicMethodExplorer currentAnalysisExplorer = 
+          ConcolicMethodExplorer.getCurrentAnalysis(ti);
+      
+      if (currentAnalysisExplorer == null) {
+        System.err.println("Warning: Cannot symbolize new object - no active ConcolicMethodExplorer");
+        return;
+      }
+      
+      // Get the symbolic objects context
+      gov.nasa.jpf.jdart.objects.SymbolicObjectsContext symContext = currentAnalysisExplorer.getSymbolicObjectsContext();
+      
+      if (symContext == null) {
+        System.err.println("Warning: Cannot symbolize new object - no SymbolicObjectsContext");
+        return;
+      }
+      
+      // Process the object polymorphically to handle different types and fields
+      symContext.processPolymorphicObject(newObjectEi, varName);
+      System.out.println("Successfully symbolized new object: " + varName + " of type " + 
+                        newObjectEi.getClassInfo().getName());
+      
+    } catch (Exception e) {
+      System.err.println("Error symbolizing new object " + varName + ": " + e.getMessage());
+      e.printStackTrace();
+    }
+  }
+  
   private static boolean containsHighLevel(Expression<?> e) {
     if (e == null) {
       return false;

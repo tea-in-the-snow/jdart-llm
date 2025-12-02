@@ -77,53 +77,28 @@ class PolymorphicObjectHandler implements SymbolicObjectHandler {
     for(FieldInfo fi : fis) {
       ctx.processPolymorphicField(ei, fi, name + "." + fi.getName());
     }
-    
-    // // Then, create symbolic variables for polymorphic handling
-    // try {
-    //   // Create a symbolic reference variable for the object reference itself
-    //   // This allows tracking whether the reference is null or points to different instances
-    //   // and enables instanceof constraints to be collected
-    //   Variable<Integer> refVar = Variable.create(BuiltinTypes.SINT32, name + ".<ref>");
-    //   SymbolicReference symRef = new SymbolicReference(refVar, ei);
-    //   // ctx.addSymbolicVar(symRef);
-    //   logger.finest("Created symbolic reference variable: " + refVar.getName());
-      
-    //   // Create a symbolic type variable for the object's dynamic type
-    //   // This allows tracking polymorphic type constraints (the object may be a subclass)
-    //   Variable<Integer> typeVar = Variable.create(BuiltinTypes.SINT32, name + ".__type");
-    //   SymbolicType symType = new SymbolicType(typeVar, ei);
-    //   // ctx.addSymbolicVar(symType);
-    //   logger.finest("Created symbolic type variable: " + typeVar.getName());
-      
-    //   // Log information about possible polymorphic types
-    //   logPolymorphicInfo(ci, name);
-      
-    // } catch(Exception ex) {
-    //   // Be conservative: if variable creation fails, do not break execution
-    //   logger.finest("Could not create polymorphic symbolic variables for " + name + ": " + ex.getMessage());
-    // }
   }
   
   /**
    * Logs information about the polymorphic nature of the object.
    * This helps understand what types the object could potentially be.
    */
-  private void logPolymorphicInfo(ClassInfo ci, String name) {
-    if(ci.isInterface()) {
-      logger.finest("Object " + name + " is of interface type " + ci.getName() + 
-                    " - may be implemented by various classes");
-    } else if(ci.getSuperClass() != null && !ci.getSuperClass().getName().equals("java.lang.Object")) {
-      logger.finest("Object " + name + " is of class " + ci.getName() + 
-                    " - may be subclass of " + ci.getSuperClass().getName());
-    } else {
-      logger.finest("Object " + name + " is of class " + ci.getName() + 
-                    " - may have subclasses");
-    }
+  // private void logPolymorphicInfo(ClassInfo ci, String name) {
+  //   if(ci.isInterface()) {
+  //     logger.finest("Object " + name + " is of interface type " + ci.getName() + 
+  //                   " - may be implemented by various classes");
+  //   } else if(ci.getSuperClass() != null && !ci.getSuperClass().getName().equals("java.lang.Object")) {
+  //     logger.finest("Object " + name + " is of class " + ci.getName() + 
+  //                   " - may be subclass of " + ci.getSuperClass().getName());
+  //   } else {
+  //     logger.finest("Object " + name + " is of class " + ci.getName() + 
+  //                   " - may have subclasses");
+  //   }
     
-    // Log implemented interfaces
-    if(ci.getAllInterfaces() != null && !ci.getAllInterfaces().isEmpty()) {
-      logger.finest("Object " + name + " implements interfaces: " + ci.getAllInterfaces());
-    }
-  }
+  //   // Log implemented interfaces
+  //   if(ci.getAllInterfaces() != null && !ci.getAllInterfaces().isEmpty()) {
+  //     logger.finest("Object " + name + " implements interfaces: " + ci.getAllInterfaces());
+  //   }
+  // }
 }
 

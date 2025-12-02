@@ -385,7 +385,8 @@ public class ConcolicMethodExplorer {
           Variable<?> refVar = Variable.create(BuiltinTypes.SINT32, name + ".<ref>");
           SymbolicParam<?> sp = new SymbolicParam<>(refVar, stackIdx);
           symContext.addStackVar(sp);
-          symContext.processPolymorphicObject(ei, name);
+          if (ei != null)
+            symContext.processPolymorphicObject(ei, name);
         } else {
           if (ei != null)
             symContext.processObject(ei, name, true);
@@ -509,6 +510,10 @@ public class ConcolicMethodExplorer {
 
   public AnalysisConfig getAnalysisConfig() {
     return anaConf;
+  }
+  
+  public SymbolicObjectsContext getSymbolicObjectsContext() {
+    return symContext;
   }
   
   public void methodExited(ThreadInfo ti, MethodInfo mi) {
