@@ -12,6 +12,8 @@ import java.util.stream.Collectors;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonParser;
+import com.google.gson.JsonPrimitive;
+import com.google.gson.Gson;
 
 import java.net.URL;
 import java.net.HttpURLConnection;
@@ -38,7 +40,8 @@ import com.google.gson.JsonElement;
 
 public class LLMEnhancedSolverContext extends SolverContext {
 
-  private final SolverContext bashSolverContext;
+  private final SolverContext baseSolverContext;
+  private static final Gson gson = new Gson();
 
   /**
    * Stack of high-level constraints per push/pop scope. Each push() creates a
@@ -48,47 +51,30 @@ public class LLMEnhancedSolverContext extends SolverContext {
   private final Deque<Map<String, Variable<?>>> hlFreeVarsStack = new ArrayDeque<Map<String, Variable<?>>>();
 
   public LLMEnhancedSolverContext(SolverContext baseSolverContext) {
-    this.bashSolverContext = baseSolverContext;
+    this.baseSolverContext = baseSolverContext;
     // initialize base scope for high-level constraints
     // this.highLevelStack.push(new ArrayList<>());
     this.hlFreeVarsStack.push(new HashMap<String, Variable<?>>());
   }
 
-  private void printHighLevelStack() {
-    List<Expression<Boolean>> hlExpressions = highLevelStack.stream()
-        .flatMap(List::stream)
-        .collect(Collectors.toList());
-
-    System.out.println("hlExpressions: " + hlExpressions);
-  }
-
   @Override
   public void push() {
-    bashSolverContext.push();
+    baseSolverContext.push();
     highLevelStack.push(new ArrayList<>());
     Map<String, Variable<?>> fvMap = hlFreeVarsStack.peek();
     hlFreeVarsStack.push(new HashMap<String, Variable<?>>(fvMap));
-    System.out.println("----------------------------------------------------------");
-    System.out.println("Pushed new high-level constraints");
-    printHighLevelStack();
-    System.out.println("----------------------------------------------------------");
   }
 
   @Override
   public void pop(int n) {
-    System.out.println("----------------------------------------------------------");
-    bashSolverContext.pop(n);
+    baseSolverContext.pop(n);
     for (int i = 0; i < n; i++) {
       // for (int j = 0; j < highLevelStack.peek().size(); j++) {
       //   System.out.println("high-level constraint " + j + ": " + highLevelStack.peek().get(j));
       // }
       highLevelStack.pop();
-      System.out.println("Popped high-level constraint " + i);
-      // hlFreeVarsStack.pop();
+      hlFreeVarsStack.pop();
     }
-    System.out.println("Popped " + n + " high-level constraints");
-    printHighLevelStack();
-    System.out.println("----------------------------------------------------------");
   }
 
   @Override
@@ -121,7 +107,7 @@ public class LLMEnhancedSolverContext extends SolverContext {
 
     // Forward normal constraints to the base solver immediately
     if (!normal.isEmpty()) {
-      bashSolverContext.add(normal);
+      baseSolverContext.add(normal);
     }
 
     // Store high-level constraints in the current high-level scope
@@ -133,41 +119,25 @@ public class LLMEnhancedSolverContext extends SolverContext {
       // }
       current.addAll(high);
     }
-    System.out.println("----------------------------------------------------------");
-    System.out.println("Added " + expressions.size() + " expressions");
-    for (int i = 0; i < expressions.size(); i++) {
-      System.out.println("expression " + i + ": " + expressions.get(i));
-    }
-    printHighLevelStack();
-    System.out.println("----------------------------------------------------------");
   }
 
   @Override
   public void dispose() {
     highLevelStack.clear();
-    bashSolverContext.dispose();
+    baseSolverContext.dispose();
     hlFreeVarsStack.clear();
   }
 
   @Override
   public Result solve(Valuation val) {
-    // System.out.println("----------------------------------------------------------");
-    // System.out.println("Solving with " + highLevelStack.size() + " high-level
-    // constraints");
-    // for (int i = 0; i < highLevelStack.size(); i++) {
-    // System.out.println("high-level constraint " + i + ": " +
-    // highLevelStack.get(i));
-    // }
-    // System.out.println("----------------------------------------------------------");
-
     // If there are no high-level constraints in any scope, delegate to base solver.
     boolean hasHighLevel = highLevelStack.stream().anyMatch(list -> !list.isEmpty());
     if (!hasHighLevel) {
-      return bashSolverContext.solve(val);
+      return baseSolverContext.solve(val);
     }
 
     // First, solve normal (non-high-level) constraints using base solver
-    Result baseResult = bashSolverContext.solve(val);
+    Result baseResult = baseSolverContext.solve(val);
     if (baseResult != Result.SAT) {
       System.out.println("**********************************************************");
       System.out.println("Base constraints are UNSAT, returning UNSAT");
@@ -251,56 +221,60 @@ public class LLMEnhancedSolverContext extends SolverContext {
 
   /**
    * Build JSON payload from high-level expressions and valuation.
+   * Uses Gson for proper JSON serialization with automatic escaping.
    */
   private String buildJsonPayload(List<Expression<Boolean>> hlExpressions, Valuation val) {
-    StringBuilder sb = new StringBuilder();
-    sb.append('{');
-    sb.append("\"constraints\":[");
+    JsonObject payload = new JsonObject();
 
-    // Use all provided high-level expressions (from all active scopes).
-    String constraintsJson = hlExpressions.stream()
-        .map(Object::toString)
-        .map(LLMEnhancedSolverContext::escapeJson)
-        .map(s -> "\"" + s + "\"")
-        .collect(Collectors.joining(","));
-    sb.append(constraintsJson);
-    sb.append("],");
-    sb.append("\"valuation\":");
+    // Build constraints array
+    JsonArray constraintsArray = new JsonArray();
+    for (Expression<Boolean> expr : hlExpressions) {
+      constraintsArray.add(new JsonPrimitive(expr.toString()));
+    }
+    payload.add("constraints", constraintsArray);
+
+    // Build valuation object
     if (val == null) {
-      sb.append("null");
+      payload.add("valuation", null);
     } else {
-      // Convert Valuation to JSON object format: {"varName1": "value1", "varName2":
-      // "value2", ...}
-      sb.append('{');
-      boolean first = true;
+      JsonObject valuationObj = new JsonObject();
       for (ValuationEntry<?> entry : val.entries()) {
-        if (!first) {
-          sb.append(',');
-        }
-        first = false;
         String varName = entry.getVariable().getName();
         Object value = entry.getValue();
-        sb.append('"').append(escapeJson(varName)).append("\":");
-        // Convert value to JSON format
+        
+        // Convert value to appropriate JsonElement
         if (value == null) {
-          sb.append("null");
+          valuationObj.add(varName, null);
         } else if (value instanceof String) {
-          sb.append('"').append(escapeJson(value.toString())).append('"');
-        } else if (value instanceof Number || value instanceof Boolean) {
-          sb.append(value);
+          valuationObj.addProperty(varName, (String) value);
+        } else if (value instanceof Number) {
+          // Handle different number types
+          if (value instanceof Integer) {
+            valuationObj.addProperty(varName, (Integer) value);
+          } else if (value instanceof Long) {
+            valuationObj.addProperty(varName, (Long) value);
+          } else if (value instanceof Double) {
+            valuationObj.addProperty(varName, (Double) value);
+          } else if (value instanceof Float) {
+            valuationObj.addProperty(varName, (Float) value);
+          } else {
+            // For other number types, convert to string
+            valuationObj.addProperty(varName, value.toString());
+          }
+        } else if (value instanceof Boolean) {
+          valuationObj.addProperty(varName, (Boolean) value);
         } else {
-          // For other types, convert to string and quote it
-          sb.append('"').append(escapeJson(value.toString())).append('"');
+          // For other types, convert to string
+          valuationObj.addProperty(varName, value.toString());
         }
       }
-      sb.append('}');
+      payload.add("valuation", valuationObj);
     }
-    sb.append(',');
-    // optional hint field for LLM side
-    sb.append("\"hint\":\"java-jdart-llm-high-level-constraints\"");
-    sb.append('}');
 
-    return sb.toString();
+    // Add optional hint field
+    payload.addProperty("hint", "java-jdart-llm-high-level-constraints");
+
+    return gson.toJson(payload);
   }
 
   /**
@@ -354,32 +328,46 @@ public class LLMEnhancedSolverContext extends SolverContext {
    * Returns the appropriate Result based on the response.
    */
   private Result parseLlmResponse(String body, Valuation val) {
-    // Simple, dependency-free parsing: look for "result":"SAT"/"UNSAT"/"UNKNOWN"
-    // (case-insensitive).
-    String normalized = body.toUpperCase();
-    if (normalized.contains("\"RESULT\"") && normalized.contains("SAT")) {
-      // parse the valuation array from the body
+    try {
       JsonObject jsonObject = new JsonParser().parse(body).getAsJsonObject();
-      JsonArray llmValuationArray = jsonObject.getAsJsonArray("valuation");
-
-      System.out.println("\n===================================================");
-      // Update the valuation with the valuation array
-      if (val != null && llmValuationArray != null) {
-        updateValuationFromLlmResponse(llmValuationArray, val);
+      
+      // Get result field
+      if (!jsonObject.has("result")) {
+        System.err.println("LLM solver response missing 'result' field, body: " + body);
+        return Result.DONT_KNOW;
       }
-      System.out.println("=================================================\n");
+      
+      String resultStr = jsonObject.get("result").getAsString().toUpperCase();
+      
+      if ("SAT".equals(resultStr)) {
+        // Parse the valuation array from the body
+        JsonArray llmValuationArray = null;
+        if (jsonObject.has("valuation") && !jsonObject.get("valuation").isJsonNull()) {
+          llmValuationArray = jsonObject.getAsJsonArray("valuation");
+        }
 
-      return Result.SAT;
-    }
-    if (normalized.contains("\"RESULT\"") && normalized.contains("UNSAT")) {
-      return Result.UNSAT;
-    }
-    if (normalized.contains("\"RESULT\"") && (normalized.contains("UNKNOWN") || normalized.contains("DONT_KNOW"))) {
+        System.out.println("\n===================================================");
+        // Update the valuation with the valuation array
+        if (val != null && llmValuationArray != null) {
+          updateValuationFromLlmResponse(llmValuationArray, val);
+        }
+        System.out.println("=================================================\n");
+
+        return Result.SAT;
+      } else if ("UNSAT".equals(resultStr)) {
+        return Result.UNSAT;
+      } else if ("UNKNOWN".equals(resultStr) || "DONT_KNOW".equals(resultStr)) {
+        return Result.DONT_KNOW;
+      } else {
+        System.err.println("LLM solver returned unknown result value: " + resultStr);
+        return Result.DONT_KNOW;
+      }
+    } catch (Exception e) {
+      System.err.println("Failed to parse LLM solver response: " + e.getMessage());
+      System.err.println("Response body: " + body);
+      e.printStackTrace();
       return Result.DONT_KNOW;
     }
-
-    System.err.println("LLM solver response could not be interpreted, body: " + body);
-    return Result.DONT_KNOW;
   }
 
   /**
@@ -528,13 +516,6 @@ public class LLMEnhancedSolverContext extends SolverContext {
       System.out.println(
           "Updated variable " + varName + " = " + objRef + " (object reference for type " + typeSignature + ")");
     }
-  }
-
-  private static String escapeJson(String s) {
-    if (s == null) {
-      return "";
-    }
-    return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n");
   }
 
   private static boolean containsHighLevel(Expression<?> e) {
