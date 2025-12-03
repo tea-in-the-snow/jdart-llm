@@ -92,6 +92,7 @@ import gov.nasa.jpf.jdart.bytecode.LSUB;
 import gov.nasa.jpf.jdart.bytecode.LUSHR;
 import gov.nasa.jpf.jdart.bytecode.LXOR;
 import gov.nasa.jpf.jdart.bytecode.NATIVERETURN;
+import gov.nasa.jpf.jdart.bytecode.INVOKEVIRTUAL;
 import gov.nasa.jpf.jdart.bytecode.TABLESWITCH;
 import gov.nasa.jpf.util.JPFLogger;
 import gov.nasa.jpf.vm.Instruction;
@@ -500,6 +501,11 @@ public class ConcolicInstructionFactory extends gov.nasa.jpf.jvm.bytecode.Instru
 	@Override
 	public gov.nasa.jpf.jvm.bytecode.L2I l2i() {
 		return  new L2I();
+	}
+
+	@Override
+	public gov.nasa.jpf.jvm.bytecode.INVOKEVIRTUAL invokevirtual(String clsDescriptor, String methodName, String signature) {
+		return new INVOKEVIRTUAL(clsDescriptor, methodName, signature);
 	}
    
 }

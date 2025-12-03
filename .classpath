@@ -15,5 +15,6 @@
 	<classpathentry kind="lib" path="lib/guava-14.0.1.jar"/>
 	<classpathentry kind="lib" path="lib/ST-4.0.5.jar"/>
 	<classpathentry excluding="src/classes/|src/tests/|src/peers/|src/main/|src/examples/|src/annotations/|src/resources/" kind="src" path=""/>
-	<classpathentry kind="output" path="bin"/>
+	<classpathentry kind="lib" path="lib/asm-7.1.jar"/>
+	<classpathentry kind="output" path="build/main"/>
 </classpath>

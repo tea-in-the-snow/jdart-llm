@@ -31,6 +31,7 @@ import gov.nasa.jpf.constraints.api.Variable;
 import gov.nasa.jpf.constraints.util.ExpressionUtil;
 import gov.nasa.jpf.jdart.ConcolicMethodExplorer;
 import gov.nasa.jpf.vm.ClassInfo;
+import gov.nasa.jpf.vm.ClassInfoException;
 import gov.nasa.jpf.vm.ClassLoaderInfo;
 import gov.nasa.jpf.vm.ElementInfo;
 import gov.nasa.jpf.vm.Heap;
@@ -568,11 +569,38 @@ public class LLMEnhancedSolverContext extends SolverContext {
 
     // Only create a new object if types don't match or no value exists
     if (needNewObject) {
-      // Get ClassInfo from class name using the system class loader
       ClassLoaderInfo sysCl = ClassLoaderInfo.getCurrentSystemClassLoader();
-      ClassInfo ci = sysCl.getResolvedClassInfo(className);
+      if (sysCl == null) {
+        System.err.println("Warning: System class loader unavailable, cannot resolve class " + className);
+        return;
+      }
+
+      ClassInfo ci;
+      try {
+        ci = sysCl.getResolvedClassInfo(className);
+      } catch (ClassInfoException cie) {
+        System.err.println("Warning: Failed to resolve class for type signature " + typeSignature + ": " + cie.getMessage());
+        return;
+      }
+
       Heap heap = vm.getHeap();
       ThreadInfo ti = vm.getCurrentThread();
+
+      if (heap == null || ti == null) {
+        System.err.println("Warning: Missing heap or current thread, cannot allocate object for " + className);
+        return;
+      }
+
+      try {
+        if (!ci.isInitialized()) {
+          ci.initializeClassAtomic(ti);
+        }
+      } catch (RuntimeException initEx) {
+        System.err.println("Warning: Failed to initialize class " + className + " before allocation: " + initEx.getMessage());
+        initEx.printStackTrace();
+        return;
+      }
+
       ElementInfo newObjectEi = heap.newObject(ci, ti);
 
       // Get the object reference (an int value representing the object ID in the
