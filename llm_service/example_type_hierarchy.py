@@ -18,11 +18,11 @@ def example_with_arraylist():
     
     payload = {
         "constraints": [
-            "list.<ref> instanceof Ljava/util/ArrayList;",
-            "list.<ref> != null"
+            "list(ref) instanceof Ljava/util/ArrayList;",
+            "list(ref) != null"
         ],
         "valuation": {
-            "list.<ref>": 456
+            "list(ref)": 456
         },
         "type_hierarchy": {
             "list": """Type: java.util.ArrayList (signature: Ljava/util/ArrayList;)
@@ -47,10 +47,10 @@ def example_with_null_constraint():
     
     payload = {
         "constraints": [
-            "cell.<ref> == null"
+            "cell(ref) == null"
         ],
         "valuation": {
-            "cell.<ref>": 789
+            "cell(ref)": 789
         },
         "type_hierarchy": {
             "cell": """Type: java.lang.Object (signature: Ljava/lang/Object;)
@@ -73,14 +73,14 @@ def example_polymorphic_types():
     
     payload = {
         "constraints": [
-            "obj1.<ref> instanceof Ljava/util/List;",
-            "obj2.<ref> instanceof Ljava/lang/String;",
-            "obj1.<ref> != null",
-            "obj2.<ref> != null"
+            "obj1(ref) instanceof Ljava/util/List;",
+            "obj2(ref) instanceof Ljava/lang/String;",
+            "obj1(ref) != null",
+            "obj2(ref) != null"
         ],
         "valuation": {
-            "obj1.<ref>": 100,
-            "obj2.<ref>": 200
+            "obj1(ref)": 100,
+            "obj2(ref)": 200
         },
         "type_hierarchy": {
             "obj1": """Type: java.util.ArrayList (signature: Ljava/util/ArrayList;)

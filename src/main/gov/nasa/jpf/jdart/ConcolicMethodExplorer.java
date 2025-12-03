@@ -121,7 +121,7 @@ public class ConcolicMethodExplorer {
   
   /**
    * Get all reference type symbolic variables and their current values.
-   * Returns a Valuation containing only reference type variables (those ending with ".<ref>").
+   * Returns a Valuation containing only reference type variables (those ending with "(ref)").
    * Only includes values that correspond to objects that exist in the initial parameters.
    */
   public Valuation getReferenceTypeSymbolicValues() {
@@ -140,9 +140,9 @@ public class ConcolicMethodExplorer {
     for(SymbolicVariable<?> sv : symContext.getSymbolicVars()) {
       Variable<?> var = sv.getVariable();
       String varName = var.getName();
-      // Check if this is a reference type variable (ends with ".<ref>")
-      if(varName.endsWith(".<ref>")) {
-        // Extract the base parameter name (remove ".<ref>" suffix)
+      // Check if this is a reference type variable (ends with "(ref)")
+      if(varName.endsWith("(ref)")) {
+        // Extract the base parameter name (remove "(ref)" suffix)
         String baseName = varName.substring(0, varName.length() - 6);
         
         // Find the corresponding parameter index
@@ -382,7 +382,7 @@ public class ConcolicMethodExplorer {
 
         // If configured, create a symbolic parameter for the reference
         if (anaConf.createRefSymbolicParams()) {
-          Variable<?> refVar = Variable.create(BuiltinTypes.SINT32, name + ".<ref>");
+          Variable<?> refVar = Variable.create(BuiltinTypes.SINT32, name + "(ref)");
           SymbolicParam<?> sp = new SymbolicParam<>(refVar, stackIdx);
           symContext.addStackVar(sp);
           if (ei != null)

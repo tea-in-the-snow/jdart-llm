@@ -17,3 +17,7 @@ class Cat extends Animal {
         System.out.println("Meow!!!");
     }
 }
+
+interface animalInterface {
+    void makeSound();
+}

@@ -15,11 +15,11 @@ def test_type_hierarchy():
     # Sample payload with type hierarchy information
     payload = {
         "constraints": [
-            "list.<ref> instanceof Ljava/util/List;",
-            "list.<ref> != null"
+            "list(ref) instanceof Ljava/util/List;",
+            "list(ref) != null"
         ],
         "valuation": {
-            "list.<ref>": 123
+            "list(ref)": 123
         },
         "type_hierarchy": {
             "list": """Type: java.util.ArrayList (signature: Ljava/util/ArrayList;)

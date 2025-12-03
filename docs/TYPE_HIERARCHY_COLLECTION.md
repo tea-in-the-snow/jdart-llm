@@ -35,7 +35,7 @@
   "constraints": ["高级约束表达式"],
   "valuation": {
     "variable1": "value1",
-    "variable2.<ref>": 123
+    "variable2(ref)": 123
   },
   "type_hierarchy": {
     "variable2": "Type: java.util.ArrayList (signature: Ljava/util/ArrayList;)\n  Extends: java.util.AbstractList\n  Implements: java.util.List, java.util.RandomAccess, java.lang.Cloneable, java.io.Serializable\n  Class hierarchy: java.util.ArrayList -> java.util.AbstractList -> java.util.AbstractCollection -> java.lang.Object\n  All interfaces: java.util.List, java.util.Collection, java.lang.Iterable, java.util.RandomAccess, java.lang.Cloneable, java.io.Serializable"

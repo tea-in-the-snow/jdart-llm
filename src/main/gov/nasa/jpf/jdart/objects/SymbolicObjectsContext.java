@@ -205,7 +205,7 @@ public class SymbolicObjectsContext {
     logger.finest("processing polymorphic field " + name);
     boolean force = isSymbolicField(fi);
     if(fi.isReference()) {
-      Variable<Integer> refVar = Variable.create(BuiltinTypes.SINT32, name + ".<ref>");
+      Variable<Integer> refVar = Variable.create(BuiltinTypes.SINT32, name + "(ref)");
       SymbolicReferenceField sf = new SymbolicReferenceField(refVar, ei, fi);
       symbolicVars.put(name, sf);
       // ei.setFieldAttr(fi, refVar);

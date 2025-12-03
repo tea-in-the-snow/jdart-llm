@@ -36,11 +36,11 @@ POST `/solve` 端点现在接受一个新的可选字段 `type_hierarchy`：
 ```json
 {
   "constraints": [
-    "list.<ref> instanceof Ljava/util/List;",
-    "list.<ref> != null"
+    "list(ref) instanceof Ljava/util/List;",
+    "list(ref) != null"
   ],
   "valuation": {
-    "list.<ref>": 123
+    "list(ref)": 123
   },
   "type_hierarchy": {
     "list": "Type: java.util.ArrayList (signature: Ljava/util/ArrayList;)\n  Extends: java.util.AbstractList\n  Implements: java.util.List, java.util.RandomAccess, java.lang.Cloneable, java.io.Serializable\n  Class hierarchy: java.util.ArrayList -> java.util.AbstractList -> java.util.AbstractCollection -> java.lang.Object\n  All interfaces: java.util.List, java.util.Collection, java.lang.Iterable, java.util.RandomAccess, java.lang.Cloneable, java.io.Serializable"
@@ -72,11 +72,11 @@ Type: java.util.ArrayList (signature: Ljava/util/ArrayList;)
   All interfaces: java.util.List, java.util.Collection, java.lang.Iterable, java.util.RandomAccess, java.lang.Cloneable, java.io.Serializable
 
 Constraints:
-- list.<ref> instanceof Ljava/util/List;
-- list.<ref> != null
+- list(ref) instanceof Ljava/util/List;
+- list(ref) != null
 
 Base valuation (may be empty):
-list.<ref> = 123
+list(ref) = 123
 ```
 
 ### LLM 使用指南
