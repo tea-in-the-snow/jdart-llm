@@ -51,6 +51,7 @@ def flatten_valuation(valuation: Dict[str, Any], prefix: str = "") -> Dict[str, 
 class SolveRequest(BaseModel):
     constraints: List[str]
     valuation: Optional[Dict[str, Any]] = None
+    type_hierarchy: Optional[Dict[str, str]] = None
     max_tokens: Optional[int] = 512
     temperature: Optional[float] = 0.0
 
@@ -61,7 +62,8 @@ async def solve(req: SolveRequest):
     # Prepare request data for logging
     request_data = {
         "constraints": req.constraints,
-        "valuation": req.valuation
+        "valuation": req.valuation,
+        "type_hierarchy": req.type_hierarchy
     }
     
     # Read the content of ctx.md file as reference information
@@ -84,7 +86,9 @@ async def solve(req: SolveRequest):
         "   - Type constraints: \"x instanceof Ljava/util/List;\" means x must be an instance of List\n"
         "   - Null checks: \"x == null\" or \"x != null\"\n"
         "   - Field access: \"x.field\" where x must be non-null\n"
-        "   - Numeric constraints: comparisons, arithmetic operations\n\n"
+        "   - Numeric constraints: comparisons, arithmetic operations\n"
+        "   - When type_hierarchy information is provided, use it to understand the inheritance relationships\n"
+        "     and valid type assignments for reference variables\n\n"
         "2. The base valuation is only a starting point, not fixed truth. You are allowed (and expected) to MODIFY it\n"
         "   as needed to satisfy the constraints, as long as you keep changes minimal and consistent.\n"
         "   Example: if the constraint is \"('cell.<ref>' == null)\" and the base valuation contains\n"
@@ -109,6 +113,14 @@ async def solve(req: SolveRequest):
 
     constraints_block = "\n".join(f"- {c}" for c in req.constraints)
     valuation_block = "" if not req.valuation else "\n".join(f"{k} = {v}" for k, v in req.valuation.items())
+    
+    # Build type hierarchy block if provided
+    type_hierarchy_block = ""
+    if req.type_hierarchy:
+        type_hierarchy_block = "Type Hierarchy Information:\n"
+        for var_name, type_info in req.type_hierarchy.items():
+            type_hierarchy_block += f"\nVariable: {var_name}\n{type_info}\n"
+        type_hierarchy_block += "\n"
 
     # If there is ctx.md content, add it to the prompt
     context_block = ""
@@ -117,6 +129,7 @@ async def solve(req: SolveRequest):
     
     human = (
         f"{context_block}"
+        f"{type_hierarchy_block}"
         f"Constraints:\n{constraints_block}\n\n"
         f"Base valuation (may be empty):\n{valuation_block}\n\n"
         "Please produce JSON only. If uncertain, return {\"result\":\"UNKNOWN\", \"raw\": \"explain...\"}."

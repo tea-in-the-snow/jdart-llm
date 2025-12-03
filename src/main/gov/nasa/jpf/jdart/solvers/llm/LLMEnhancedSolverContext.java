@@ -272,10 +272,78 @@ public class LLMEnhancedSolverContext extends SolverContext {
       payload.add("valuation", valuationObj);
     }
 
+    // Collect and add type hierarchy information for reference type symbolic variables
+    JsonObject typeHierarchyObj = collectTypeHierarchyInfo(val);
+    if (typeHierarchyObj != null && typeHierarchyObj.entrySet().size() > 0) {
+      payload.add("type_hierarchy", typeHierarchyObj);
+    }
+
     // Add optional hint field
     payload.addProperty("hint", "java-jdart-llm-high-level-constraints");
 
     return gson.toJson(payload);
+  }
+
+  /**
+   * Collect type hierarchy information for reference type symbolic variables.
+   * This extracts class inheritance relationships, implemented interfaces, etc.
+   * from the JPF ClassInfo objects for variables that reference objects.
+   * 
+   * @param val the current valuation containing variable values
+   * @return JsonObject mapping variable names to their type hierarchy information
+   */
+  private JsonObject collectTypeHierarchyInfo(Valuation val) {
+    JsonObject typeHierarchyObj = new JsonObject();
+    
+    if (val == null) {
+      return typeHierarchyObj;
+    }
+    
+    VM vm = VM.getVM();
+    if (vm == null) {
+      // Not in JPF execution context
+      return typeHierarchyObj;
+    }
+    
+    Heap heap = vm.getHeap();
+    
+    // Iterate through all variables in the valuation
+    for (ValuationEntry<?> entry : val.entries()) {
+      String varName = entry.getVariable().getName();
+      Object value = entry.getValue();
+      
+      // Check if this is a reference type variable (integer reference in JPF)
+      if (value instanceof Integer) {
+        int objRef = (Integer) value;
+        
+        // Skip null references
+        if (objRef == 0) {
+          continue;
+        }
+        
+        // Get the object from the heap
+        ElementInfo ei = heap.get(objRef);
+        if (ei == null) {
+          continue;
+        }
+        
+        // Get the ClassInfo for this object
+        ClassInfo ci = ei.getClassInfo();
+        
+        // Extract type hierarchy information
+        TypeHierarchyInfo typeInfo = TypeHierarchyInfo.extractFrom(ci);
+        if (typeInfo != null) {
+          // Convert to descriptive string format
+          String typeDesc = typeInfo.toDescriptiveString();
+          typeHierarchyObj.addProperty(varName, typeDesc);
+          
+          System.out.println("Collected type hierarchy for " + varName + ":");
+          System.out.println(typeDesc);
+        }
+      }
+    }
+    
+    return typeHierarchyObj;
   }
 
   /**
