@@ -57,6 +57,8 @@ import gov.nasa.jpf.jdart.bytecode.IFLT;
 import gov.nasa.jpf.jdart.bytecode.IFNE;
 import gov.nasa.jpf.jdart.bytecode.IFNULL;
 import gov.nasa.jpf.jdart.bytecode.IFNONNULL;
+import gov.nasa.jpf.jdart.bytecode.IF_ACMPEQ;
+import gov.nasa.jpf.jdart.bytecode.IF_ACMPNE;
 import gov.nasa.jpf.jdart.bytecode.IF_ICMPEQ;
 import gov.nasa.jpf.jdart.bytecode.IF_ICMPGE;
 import gov.nasa.jpf.jdart.bytecode.IF_ICMPGT;
@@ -271,6 +273,16 @@ public class ConcolicInstructionFactory extends gov.nasa.jpf.jvm.bytecode.Instru
 	@Override
 	public gov.nasa.jpf.jvm.bytecode.IF_ICMPNE if_icmpne(int targetPc) {
 		return new IF_ICMPNE(targetPc);
+	}
+
+	@Override
+	public gov.nasa.jpf.jvm.bytecode.IF_ACMPEQ if_acmpeq(int targetPc) {
+		return new IF_ACMPEQ(targetPc);
+	}
+
+	@Override
+	public gov.nasa.jpf.jvm.bytecode.IF_ACMPNE if_acmpne(int targetPc) {
+		return new IF_ACMPNE(targetPc);
 	}
 
 
