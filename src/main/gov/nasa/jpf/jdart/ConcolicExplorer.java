@@ -16,6 +16,8 @@
 package gov.nasa.jpf.jdart;
 
 import gov.nasa.jpf.JPF;
+import gov.nasa.jpf.jdart.bytecode.INVOKEVIRTUAL;
+import gov.nasa.jpf.jdart.bytecode.INVOKEINTERFACE;
 import gov.nasa.jpf.jdart.config.ConcolicConfig;
 import gov.nasa.jpf.jdart.termination.TerminationStrategy;
 import gov.nasa.jpf.util.JPFLogger;
@@ -117,6 +119,10 @@ public final class ConcolicExplorer {
     if(this.analysis != null) {
       throw new IllegalStateException("Cannot start new analysis, already running!");
     }
+
+    // Clear bytecode instruction caches at the start of new analysis
+    INVOKEVIRTUAL.clearCache();
+    INVOKEINTERFACE.clearCache();
 
     // start new analysis
     analysis = new ConcolicMethodExplorer(config, id, mi);
