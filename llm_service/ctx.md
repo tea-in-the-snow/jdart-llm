@@ -82,3 +82,10 @@ class Node {
         }
         return false; // No cycle
     }
+    public static void testInterface(animalInterface ani) {
+        if (ani == null) {
+            System.out.println("ani is null");
+            return;
+        }
+        ani.makeSound();
+    }
