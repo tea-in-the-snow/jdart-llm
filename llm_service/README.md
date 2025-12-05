@@ -55,6 +55,16 @@ Accepts JSON request with constraints and optional base valuation.
 {
   "constraints": ["constraint1", "constraint2", ...],
   "valuation": {"key": "value", ...},  // Optional: base valuation
+  "type_hierarchy": {"var": "type_info", ...},  // Optional: type hierarchy information
+  "heap_state": {  // Optional: heap state information (NEW)
+    "aliases": {"var": ref, ...},  // Variable to object reference mapping
+    "objects": {  // Object reference to object description mapping
+      "ref": {
+        "class": "ClassName",
+        "fields": {"field": value, ...}
+      }
+    }
+  },
   "max_tokens": 512,  // Optional: max tokens for LLM response (default: 512)
   "temperature": 0.0  // Optional: temperature for LLM (default: 0.0)
 }
@@ -114,6 +124,75 @@ The service handles various Java constraint types:
 - **Null checks**: `"x == null"` or `"x != null"`
 - **Field access**: `"x.field"` (requires x to be non-null)
 - **Numeric constraints**: comparisons, arithmetic operations
+- **Reference comparisons**: `"x == y"` or `"x != y"` (with heap state support)
+
+### Heap State (NEW)
+
+The service now supports **heap state information** to help the LLM understand object relationships and structure:
+
+**What is heap state?**
+- A snapshot of reachable objects from the current execution path
+- Shows object references, fields, and relationships between objects
+- Helps LLM reason about aliasing, cycles, and complex data structures
+
+**Heap State Format:**
+```json
+{
+  "aliases": {
+    "head": 466,      // Variable 'head' points to object 466
+    "slow": 469,      // Variable 'slow' points to object 469
+    "fast": 469       // Variable 'fast' points to object 469 (aliasing!)
+  },
+  "objects": {
+    "466": {
+      "class": "ListNode",
+      "fields": {
+        "next": 469,  // Reference to object 469
+        "val": 1      // Primitive value
+      }
+    },
+    "469": {
+      "class": "ListNode",
+      "fields": {
+        "next": 486,
+        "val": 2
+      }
+    },
+    "486": {
+      "class": "ListNode",
+      "fields": {
+        "next": 469,  // Cycle! Points back to 469
+        "val": 3
+      }
+    }
+  }
+}
+```
+
+**Use Cases for Heap State:**
+- **Cycle detection**: Identify circular references in linked lists, graphs
+- **Aliasing analysis**: Understand when multiple variables point to the same object
+- **Structural reasoning**: Analyze tree, graph, or list structures
+- **Field constraints**: Reason about field values in the context of object relationships
+
+**Example with Heap State:**
+```bash
+curl -X POST http://localhost:8000/solve \
+  -H "Content-Type: application/json" \
+  -d '{
+    "constraints": ["slow == fast", "slow != null"],
+    "valuation": {"slow": 469, "fast": 469},
+    "heap_state": {
+      "aliases": {"slow": 469, "fast": 469},
+      "objects": {
+        "469": {"class": "ListNode", "fields": {"next": 486, "val": 2}},
+        "486": {"class": "ListNode", "fields": {"next": 469, "val": 3}}
+      }
+    }
+  }'
+```
+
+The LLM can now see that both `slow` and `fast` point to the same object (469), and that there's a cycle in the linked list structure.
 
 ### Logging
 

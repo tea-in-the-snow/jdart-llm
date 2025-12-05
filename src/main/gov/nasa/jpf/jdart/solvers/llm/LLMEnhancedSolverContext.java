@@ -10,6 +10,9 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.io.IOException;
 
+import com.google.gson.JsonObject;
+
+import gov.nasa.jpf.JPF;
 import gov.nasa.jpf.constraints.api.ConstraintSolver.Result;
 import gov.nasa.jpf.constraints.api.Expression;
 import gov.nasa.jpf.constraints.api.SolverContext;
@@ -17,11 +20,16 @@ import gov.nasa.jpf.constraints.api.Valuation;
 import gov.nasa.jpf.constraints.api.Variable;
 import gov.nasa.jpf.constraints.util.ExpressionUtil;
 import gov.nasa.jpf.jdart.solvers.llm.LLMSolverClient.LLMSolverResponse;
+import gov.nasa.jpf.util.JPFLogger;
+import gov.nasa.jpf.vm.ThreadInfo;
+import gov.nasa.jpf.vm.VM;
 
 public class LLMEnhancedSolverContext extends SolverContext {
 
   private final SolverContext baseSolverContext;
   private final LLMSolverClient llmClient;
+  private final HeapStateCollector heapCollector;
+  private JPFLogger logger = JPF.getLogger("jdart.llm");
 
   /**
    * Stack of high-level constraints per push/pop scope. Each push() creates a
@@ -33,6 +41,7 @@ public class LLMEnhancedSolverContext extends SolverContext {
   public LLMEnhancedSolverContext(SolverContext baseSolverContext) {
     this.baseSolverContext = baseSolverContext;
     this.llmClient = LLMSolverClient.createDefault();
+    this.heapCollector = HeapStateCollector.createDefault();
     // initialize base scope for high-level constraints
     // this.highLevelStack.push(new ArrayList<>());
     this.hlFreeVarsStack.push(new HashMap<String, Variable<?>>());
@@ -51,7 +60,8 @@ public class LLMEnhancedSolverContext extends SolverContext {
     baseSolverContext.pop(n);
     for (int i = 0; i < n; i++) {
       // for (int j = 0; j < highLevelStack.peek().size(); j++) {
-      //   System.out.println("high-level constraint " + j + ": " + highLevelStack.peek().get(j));
+      // System.out.println("high-level constraint " + j + ": " +
+      // highLevelStack.peek().get(j));
       // }
       highLevelStack.pop();
       hlFreeVarsStack.pop();
@@ -111,6 +121,7 @@ public class LLMEnhancedSolverContext extends SolverContext {
 
   @Override
   public Result solve(Valuation val) {
+
     // If there are no high-level constraints in any scope, delegate to base solver.
     boolean hasHighLevel = highLevelStack.stream().anyMatch(list -> !list.isEmpty());
     if (!hasHighLevel) {
@@ -120,9 +131,7 @@ public class LLMEnhancedSolverContext extends SolverContext {
     // First, solve normal (non-high-level) constraints using base solver
     Result baseResult = baseSolverContext.solve(val);
     if (baseResult != Result.SAT) {
-      System.out.println("**********************************************************");
-      System.out.println("Base constraints are UNSAT, returning UNSAT");
-      System.out.println("**********************************************************");
+      logger.finer("Base constraints are UNSAT, returning UNSAT");
       return baseResult;
     }
 
@@ -130,30 +139,53 @@ public class LLMEnhancedSolverContext extends SolverContext {
         .flatMap(List::stream)
         .collect(Collectors.toList());
 
-    System.out.println("----------------------------------------------------------");
-    System.out.println("Solving with " + hlExpressions.size() + " high-level constraints");
-    System.out.println("hlExpressions: " + hlExpressions);
-    System.out.println("----------------------------------------------------------");
+    logger.finer("Solving with " + hlExpressions.size() + " high-level constraints");
+    logger.finer("hlExpressions: " + hlExpressions);
 
     if (hlExpressions.isEmpty()) {
       return baseResult;
     }
 
     try {
+      // Collect heap state from current execution context
+      JsonObject heapState = null;
+      try {
+        ThreadInfo ti = VM.getVM().getCurrentThread();
+        if (ti != null) {
+          // Pass high-level expressions for constraint-aware heap slicing
+          heapState = heapCollector.collectHeapState(ti, val, hlExpressions);
+          if (heapState != null) {
+            JsonObject objects = heapState.getAsJsonObject("objects");
+            JsonObject bindings = heapState.getAsJsonObject("bindings");
+            int objectCount = objects != null ? objects.entrySet().size() : 0;
+            int bindingsCount = bindings != null ? bindings.entrySet().size() : 0;
+            
+            logger.finer("Collected heap state with " + objectCount + " reachable objects and " +
+                bindingsCount + " bindings");
+            logger.finer("Heap state: " + heapState.toString());
+          }
+        }
+      } catch (Exception e) {
+        logger.warning("Failed to collect heap state: " + e.getMessage());
+        // Continue without heap state
+      }
+
       // Send request to LLM solver
-      LLMSolverResponse response = llmClient.solve(hlExpressions, val);
-      
+      LLMSolverResponse response = llmClient.solve(hlExpressions, val, heapState);
+
       // Update valuation if SAT
       if (response.getResult() == Result.SAT && response.getValuationArray() != null && val != null) {
         Map<String, Variable<?>> varNameToVar = buildVariableNameMap();
         LLMValuationHandler valuationHandler = new LLMValuationHandler(varNameToVar);
         valuationHandler.updateValuationFromLlmResponse(response.getValuationArray(), val);
       }
-      
+
+      logger.finer("LLM solver result: " + response.getResult());
+
       return response.getResult();
     } catch (IOException e) {
       // If the LLM service is unreachable, fall back to base solver's result.
-      System.err.println("LLM solver call failed: " + e.getMessage());
+      logger.warning("LLM solver call failed: " + e.getMessage());
       return baseResult;
     }
   }
@@ -174,7 +206,7 @@ public class LLMEnhancedSolverContext extends SolverContext {
 
     return varNameToVar;
   }
-  
+
   private static boolean containsHighLevel(Expression<?> e) {
     if (e == null) {
       return false;

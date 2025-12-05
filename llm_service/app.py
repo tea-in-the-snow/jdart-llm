@@ -52,6 +52,7 @@ class SolveRequest(BaseModel):
     constraints: List[str]
     valuation: Optional[Dict[str, Any]] = None
     type_hierarchy: Optional[Dict[str, str]] = None
+    heap_state: Optional[Dict[str, Any]] = None
     max_tokens: Optional[int] = 512
     temperature: Optional[float] = 0.0
 
@@ -63,7 +64,8 @@ async def solve(req: SolveRequest):
     request_data = {
         "constraints": req.constraints,
         "valuation": req.valuation,
-        "type_hierarchy": req.type_hierarchy
+        "type_hierarchy": req.type_hierarchy,
+        "heap_state": req.heap_state
     }
     
     # Read the content of ctx.md file as reference information
@@ -87,7 +89,8 @@ async def solve(req: SolveRequest):
         "   - Null: \"x == null\" or \"x != null\"; field access implies receiver non-null.\n"
         "   - Field access: \"x.field\" uses dot-notation; if referenced, x != null.\n"
         "   - Numeric: comparisons, arithmetic; keep numbers as JSON numbers.\n"
-        "   - Type hierarchy: when provided, use it to ensure assigned reference types are compatible with inheritance.\n\n"
+        "   - Type hierarchy: when provided, use it to ensure assigned reference types are compatible with inheritance.\n"
+        "   - Heap state: when provided, use it to understand object relationships, aliasing, and heap structure.\n\n"
         "2) Base valuation is a hint, not ground truth. Modify it minimally and consistently to satisfy constraints.\n"
         "   Example: constraint \"cell(ref) == null\" with base \"cell(ref)\": 458 → return \"cell(ref)\": \"null\".\n\n"
         "3) Assigning reference types (instanceof):\n"
@@ -138,6 +141,54 @@ async def solve(req: SolveRequest):
         for var_name, type_info in req.type_hierarchy.items():
             type_hierarchy_block += f"\nVariable: {var_name}\n{type_info}\n"
         type_hierarchy_block += "\n"
+    
+    # Build heap state block if provided
+    heap_state_block = ""
+    if req.heap_state:
+        heap_state_block = "Heap State Information:\n"
+        heap_state_block += "This shows the current state of reachable objects in the heap.\n\n"
+        
+        # Add aliases (variable -> object reference mapping)
+        if "aliases" in req.heap_state:
+            aliases = req.heap_state["aliases"]
+            if aliases:
+                heap_state_block += "Aliases (variable → object reference):\n"
+                for var_name, obj_ref in aliases.items():
+                    heap_state_block += f"  {var_name} → {obj_ref}\n"
+                heap_state_block += "\n"
+        
+        # Add objects (object reference -> object description mapping)
+        if "objects" in req.heap_state:
+            objects = req.heap_state["objects"]
+            if objects:
+                heap_state_block += "Objects (reference → structure):\n"
+                for obj_ref, obj_desc in objects.items():
+                    class_name = obj_desc.get("class", "Unknown")
+                    heap_state_block += f"  {obj_ref}: {class_name}\n"
+                    
+                    # Add fields
+                    fields = obj_desc.get("fields", {})
+                    if fields:
+                        for field_name, field_value in fields.items():
+                            heap_state_block += f"    {field_name}: {field_value}\n"
+                    
+                    # Add array elements if present
+                    if "elements" in obj_desc:
+                        elements = obj_desc["elements"]
+                        heap_state_block += f"    elements: {elements}\n"
+                    
+                    # Add array length if present
+                    if "length" in obj_desc:
+                        length = obj_desc["length"]
+                        heap_state_block += f"    length: {length}\n"
+                    
+                    heap_state_block += "\n"
+        
+        heap_state_block += "Use this heap information to:\n"
+        heap_state_block += "- Understand reference relationships between objects\n"
+        heap_state_block += "- Identify aliasing (multiple variables pointing to the same object)\n"
+        heap_state_block += "- Detect cycles or structural patterns (e.g., linked list loops)\n"
+        heap_state_block += "- Reason about field values and object states\n\n"
 
     # If there is ctx.md content, add it to the prompt
     context_block = ""
@@ -147,6 +198,7 @@ async def solve(req: SolveRequest):
     human = (
         f"{context_block}"
         f"{type_hierarchy_block}"
+        f"{heap_state_block}"
         f"Constraints:\n{constraints_block}\n\n"
         f"Base valuation (may be empty):\n{valuation_block}\n\n"
         "Please produce JSON only. If uncertain, return {\"result\":\"UNKNOWN\", \"raw\": \"explain...\"}."

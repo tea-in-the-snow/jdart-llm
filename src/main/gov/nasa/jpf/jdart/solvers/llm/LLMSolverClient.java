@@ -98,11 +98,12 @@ public class LLMSolverClient {
    * 
    * @param hlExpressions High-level constraint expressions to solve
    * @param val Current valuation (may be null)
+   * @param heapState Heap state information (may be null)
    * @return LLM solver response containing result and optional valuation
    * @throws IOException if communication with LLM service fails
    */
-  public LLMSolverResponse solve(List<Expression<Boolean>> hlExpressions, Valuation val) throws IOException {
-    String payload = buildJsonPayload(hlExpressions, val);
+  public LLMSolverResponse solve(List<Expression<Boolean>> hlExpressions, Valuation val, JsonObject heapState) throws IOException {
+    String payload = buildJsonPayload(hlExpressions, val, heapState);
     String responseBody = sendLlmRequest(payload);
     
     if (responseBody == null) {
@@ -111,12 +112,31 @@ public class LLMSolverClient {
     
     return parseLlmResponse(responseBody);
   }
+  
+  /**
+   * Solve high-level constraints without heap state (backward compatibility).
+   * 
+   * @param hlExpressions High-level constraint expressions to solve
+   * @param val Current valuation (may be null)
+   * @return LLM solver response containing result and optional valuation
+   * @throws IOException if communication with LLM service fails
+   */
+  public LLMSolverResponse solve(List<Expression<Boolean>> hlExpressions, Valuation val) throws IOException {
+    return solve(hlExpressions, val, null);
+  }
 
   /**
-   * Build JSON payload from high-level expressions and valuation.
+   * Build JSON payload from high-level expressions, valuation, and heap state.
    * Uses Gson for proper JSON serialization with automatic escaping.
+   * 
+   * The heap_state structure includes:
+   * - bindings: mapping from constraint reference names (e.g., "node(ref)") to object IDs
+   * - objects: heap objects with their fields (sliced to relevant objects only)
+   * - modifiable_objects: list of object IDs that can be modified by the solver
+   * - allowed_to_allocate: whether new objects can be allocated
+   * - schemas: class field schemas for LLM understanding
    */
-  private String buildJsonPayload(List<Expression<Boolean>> hlExpressions, Valuation val) {
+  private String buildJsonPayload(List<Expression<Boolean>> hlExpressions, Valuation val, JsonObject heapState) {
     JsonObject payload = new JsonObject();
 
     // Build constraints array
@@ -162,6 +182,11 @@ public class LLMSolverClient {
         }
       }
       payload.add("valuation", valuationObj);
+    }
+
+    // Add heap state if available
+    if (heapState != null && heapState.entrySet().size() > 0) {
+      payload.add("heap_state", heapState);
     }
 
     // Add optional hint field

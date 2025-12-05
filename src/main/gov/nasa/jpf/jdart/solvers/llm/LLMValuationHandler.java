@@ -7,9 +7,11 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
+import gov.nasa.jpf.JPF;
 import gov.nasa.jpf.constraints.api.Valuation;
 import gov.nasa.jpf.constraints.api.Variable;
 import gov.nasa.jpf.jdart.ConcolicMethodExplorer;
+import gov.nasa.jpf.util.JPFLogger;
 import gov.nasa.jpf.vm.ClassInfo;
 import gov.nasa.jpf.vm.ClassInfoException;
 import gov.nasa.jpf.vm.ClassLoaderInfo;
@@ -27,6 +29,8 @@ public class LLMValuationHandler {
 
   private final Map<String, Variable<?>> variableMap;
 
+  private JPFLogger logger = JPF.getLogger("jdart");
+
   public LLMValuationHandler(Map<String, Variable<?>> variableMap) {
     this.variableMap = variableMap;
   }
@@ -35,15 +39,13 @@ public class LLMValuationHandler {
    * Update valuation from LLM response valuation array.
    * 
    * @param llmValuationArray JSON array containing variable assignments from LLM
-   * @param val The valuation to update
+   * @param val               The valuation to update
    */
   public void updateValuationFromLlmResponse(JsonArray llmValuationArray, Valuation val) {
     if (llmValuationArray == null || val == null) {
       return;
     }
 
-    System.out.println("\n===================================================");
-    
     // Iterate through each object in the valuation array
     for (int i = 0; i < llmValuationArray.size(); i++) {
       JsonObject valuationObj = llmValuationArray.get(i).getAsJsonObject();
@@ -58,13 +60,13 @@ public class LLMValuationHandler {
         Variable<?> var = variableMap.get(varName);
         if (var != null) {
           updateVariableValue(var, varName, valueElement, val);
+          logger.finer("Updated variable " + varName + " with value from LLM response");
         } else {
-          System.out.println("Warning: Variable " + varName + " not found in current valuation, skipping");
+          logger.warning("Variable " + varName + " not found in current valuation, skipping");
+          
         }
       }
     }
-    
-    System.out.println("=================================================\n");
   }
 
   /**
@@ -161,7 +163,8 @@ public class LLMValuationHandler {
       try {
         ci = sysCl.getResolvedClassInfo(className);
       } catch (ClassInfoException cie) {
-        System.err.println("Warning: Failed to resolve class for type signature " + typeSignature + ": " + cie.getMessage());
+        System.err
+            .println("Warning: Failed to resolve class for type signature " + typeSignature + ": " + cie.getMessage());
         return;
       }
 
@@ -178,7 +181,8 @@ public class LLMValuationHandler {
           ci.initializeClassAtomic(ti);
         }
       } catch (RuntimeException initEx) {
-        System.err.println("Warning: Failed to initialize class " + className + " before allocation: " + initEx.getMessage());
+        System.err
+            .println("Warning: Failed to initialize class " + className + " before allocation: " + initEx.getMessage());
         initEx.printStackTrace();
         return;
       }
@@ -194,41 +198,43 @@ public class LLMValuationHandler {
       val.setCastedValue(var, objRef);
       System.out.println(
           "Updated variable " + varName + " = " + objRef + " (object reference for type " + typeSignature + ")");
-      
+
       // Symbolize the new object to track and collect constraints on its fields
       symbolizeNewObject(newObjectEi, varName, ti);
     }
   }
 
   /**
-   * Symbolize a newly created object to track and collect constraints on its fields.
-   * This method retrieves the current symbolic execution context and processes the object
+   * Symbolize a newly created object to track and collect constraints on its
+   * fields.
+   * This method retrieves the current symbolic execution context and processes
+   * the object
    * polymorphically to handle different runtime types.
    */
   private void symbolizeNewObject(ElementInfo newObjectEi, String varName, ThreadInfo ti) {
     try {
       // Get the current concolic method explorer from the thread
-      ConcolicMethodExplorer currentAnalysisExplorer = 
-          ConcolicMethodExplorer.getCurrentAnalysis(ti);
-      
+      ConcolicMethodExplorer currentAnalysisExplorer = ConcolicMethodExplorer.getCurrentAnalysis(ti);
+
       if (currentAnalysisExplorer == null) {
         System.err.println("Warning: Cannot symbolize new object - no active ConcolicMethodExplorer");
         return;
       }
-      
+
       // Get the symbolic objects context
-      gov.nasa.jpf.jdart.objects.SymbolicObjectsContext symContext = currentAnalysisExplorer.getSymbolicObjectsContext();
-      
+      gov.nasa.jpf.jdart.objects.SymbolicObjectsContext symContext = currentAnalysisExplorer
+          .getSymbolicObjectsContext();
+
       if (symContext == null) {
         System.err.println("Warning: Cannot symbolize new object - no SymbolicObjectsContext");
         return;
       }
-      
+
       // Process the object polymorphically to handle different types and fields
       symContext.processPolymorphicObject(newObjectEi, varName);
-      System.out.println("Successfully symbolized new object: " + varName + " of type " + 
-                        newObjectEi.getClassInfo().getName());
-      
+      logger.finer("Successfully symbolized new object: " + varName + " of type " +
+          newObjectEi.getClassInfo().getName());
+
     } catch (Exception e) {
       System.err.println("Error symbolizing new object " + varName + ": " + e.getMessage());
       e.printStackTrace();

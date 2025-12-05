@@ -203,7 +203,6 @@ public class SymbolicObjectsContext {
 
   public void processPolymorphicField(ElementInfo ei, FieldInfo fi, String name) {
     logger.finest("processing polymorphic field " + name);
-    boolean force = isSymbolicField(fi);
     if(fi.isReference()) {
       Variable<Integer> refVar = Variable.create(BuiltinTypes.SINT32, name + "(ref)");
       SymbolicReferenceField sf = new SymbolicReferenceField(refVar, ei, fi);
@@ -217,7 +216,7 @@ public class SymbolicObjectsContext {
       processPolymorphicObject(elem, name);
     }
     else {
-      processPrimitiveField(ei, fi, name, force);
+      processPrimitiveField(ei, fi, name, true);
     }
   }
   
