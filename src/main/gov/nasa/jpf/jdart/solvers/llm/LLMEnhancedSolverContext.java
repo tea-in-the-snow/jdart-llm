@@ -17,6 +17,7 @@ import gov.nasa.jpf.constraints.api.ConstraintSolver.Result;
 import gov.nasa.jpf.constraints.api.Expression;
 import gov.nasa.jpf.constraints.api.SolverContext;
 import gov.nasa.jpf.constraints.api.Valuation;
+import gov.nasa.jpf.constraints.api.ValuationEntry;
 import gov.nasa.jpf.constraints.api.Variable;
 import gov.nasa.jpf.constraints.util.ExpressionUtil;
 import gov.nasa.jpf.jdart.solvers.llm.LLMSolverClient.LLMSolverResponse;
@@ -29,7 +30,7 @@ public class LLMEnhancedSolverContext extends SolverContext {
   private final SolverContext baseSolverContext;
   private final LLMSolverClient llmClient;
   private final HeapStateCollector heapCollector;
-  private JPFLogger logger = JPF.getLogger("jdart.llm");
+  private JPFLogger logger = JPF.getLogger("jdart");
 
   /**
    * Stack of high-level constraints per push/pop scope. Each push() creates a
@@ -141,6 +142,18 @@ public class LLMEnhancedSolverContext extends SolverContext {
 
     logger.finer("Solving with " + hlExpressions.size() + " high-level constraints");
     logger.finer("hlExpressions: " + hlExpressions);
+
+    // Print all symbolic variables' current values
+    if (val != null && !val.getVariables().isEmpty()) {
+      logger.finer("Current valuation before solving:");
+      for (ValuationEntry<?> entry : val.entries()) {
+        Variable<?> var = entry.getVariable();
+        Object value = entry.getValue();
+        logger.finer("  " + var.getName() + " (" + var.getType() + ") = " + value);
+      }
+    } else {
+      logger.finer("Current valuation is empty or null");
+    }
 
     if (hlExpressions.isEmpty()) {
       return baseResult;

@@ -66,6 +66,17 @@ public class ConcolicConfig {
   private TerminationStrategy termination;
   
   /**
+   * Whether to enable polymorphic method call filtering
+   */
+  private boolean polymorphicFilterEnabled = false;
+  
+  /**
+   * Package prefixes for polymorphic method filtering.
+   * Only methods declared in classes matching these prefixes will be analyzed.
+   */
+  private String[] polymorphicPackages = new String[0];
+  
+  /**
    * 
    * @param conf 
    */  
@@ -120,6 +131,20 @@ public class ConcolicConfig {
   
   public TerminationStrategy getTerminationStrategy() {
     return this.termination;
+  }
+  
+  /**
+   * Check if polymorphic method call filtering is enabled.
+   */
+  public boolean isPolymorphicFilterEnabled() {
+    return polymorphicFilterEnabled;
+  }
+  
+  /**
+   * Get package prefixes for polymorphic method filtering.
+   */
+  public String[] getPolymorphicPackages() {
+    return polymorphicPackages;
   }
   
   public Config generateJPFConfig() {
@@ -228,6 +253,13 @@ public class ConcolicConfig {
     
     // parse termination
     this.termination = parseTerminationStrategy(conf);
+    
+    // parse polymorphic filtering configuration
+    this.polymorphicFilterEnabled = conf.getBoolean("jdart.polymorphic.enable_filter", false);
+    if (conf.hasValue("jdart.polymorphic.packages")) {
+      String packagesStr = conf.getString("jdart.polymorphic.packages");
+      this.polymorphicPackages = packagesStr.trim().split("\\s*,\\s*");
+    }
   }
   
   public static TerminationStrategy parseTerminationStrategy(Config conf) {

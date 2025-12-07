@@ -94,6 +94,11 @@ public class ConcolicMethodExplorer {
   private final AnalysisConfig anaConf;
   
   /**
+   * The main concolic configuration
+   */
+  private final gov.nasa.jpf.jdart.config.ConcolicConfig concolicConfig;
+  
+  /**
    * constraints tree from exploring method
    */
   private InternalConstraintsTree constraintsTree;
@@ -180,6 +185,7 @@ public class ConcolicMethodExplorer {
     System.out.println("-------------------------------------------------------------");
     // store method info and config
     this.methodInfo = mi;
+    this.concolicConfig = config;
     this.methodConfig = config.getMethodConfig(id);
     this.anaConf = methodConfig.getAnalysisConfig();
     
@@ -510,6 +516,10 @@ public class ConcolicMethodExplorer {
 
   public AnalysisConfig getAnalysisConfig() {
     return anaConf;
+  }
+  
+  public gov.nasa.jpf.jdart.config.ConcolicConfig getConcolicConfig() {
+    return concolicConfig;
   }
   
   public SymbolicObjectsContext getSymbolicObjectsContext() {

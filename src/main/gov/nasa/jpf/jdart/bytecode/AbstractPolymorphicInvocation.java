@@ -133,6 +133,11 @@ public abstract class AbstractPolymorphicInvocation {
 
       // Get information about the method to be invoked
       MethodInfo callee = getInvokedMethod(ti, objRef);
+      
+      // Apply filtering if enabled
+      if (shouldFilterMethod(analysis, callee)) {
+        return;
+      }
 
       if (callee != null) {
         String methodName = callee.getName();
@@ -345,5 +350,68 @@ public abstract class AbstractPolymorphicInvocation {
    */
   protected interface ClassInfoFilter {
     boolean accept(ClassInfo classInfo);
+  }
+
+  /**
+   * Check if the method should be filtered out based on configuration.
+   * Returns true if the method should be skipped (not analyzed for type constraints).
+   * 
+   * @param analysis Current concolic method explorer
+   * @param callee The method being invoked
+   * @return true if should filter (skip), false otherwise
+   */
+  protected boolean shouldFilterMethod(ConcolicMethodExplorer analysis, MethodInfo callee) {
+    if (callee == null) {
+      return true; // Skip if method is null
+    }
+    
+    // Get the configuration from the analysis
+    gov.nasa.jpf.jdart.config.ConcolicConfig config = getConfig(analysis);
+    if (config == null) {
+      return false; // No config, don't filter
+    }
+    
+    // Check if filtering is enabled
+    if (!config.isPolymorphicFilterEnabled()) {
+      return false; // Filtering disabled, process all methods
+    }
+    
+    // Get the class declaring the method
+    ClassInfo declaringClass = callee.getClassInfo();
+    if (declaringClass == null) {
+      return true; // Skip if no declaring class
+    }
+    
+    String className = declaringClass.getName();
+    String[] packages = config.getPolymorphicPackages();
+    
+    // If no packages configured, filter out everything (safe default)
+    if (packages == null || packages.length == 0) {
+      System.out.println("Polymorphic filter enabled but no packages configured, skipping method: " + callee.getFullName());
+      return true;
+    }
+    
+    // Check if the class matches any of the configured packages
+    for (String pkg : packages) {
+      if (className.startsWith(pkg)) {
+        // Method is in target package, don't filter
+        return false;
+      }
+    }
+    
+    // Method is not in any target package, filter it out
+    System.out.println("Filtering out polymorphic method call: " + callee.getFullName() + 
+        " (class: " + className + " not in target packages: " + java.util.Arrays.toString(packages) + ")");
+    return true;
+  }
+
+  /**
+   * Get the ConcolicConfig from the analysis.
+   */
+  protected gov.nasa.jpf.jdart.config.ConcolicConfig getConfig(ConcolicMethodExplorer analysis) {
+    if (analysis == null) {
+      return null;
+    }
+    return analysis.getConcolicConfig();
   }
 }
