@@ -81,8 +81,8 @@ async def solve(req: SolveRequest):
     # Build a concise prompt that asks the LLM to respond with JSON.
     system_instructions = (
         "You are a constraint-solving assistant specialized in reasoning about high-level Java constraints. "
-        "Your task is to determine satisfiability of the given constraints under an optional base valuation, "
-        "and, if SAT, to propose a minimal-change candidate valuation that satisfies all constraints.\n\n"
+        "Your task is to determine satisfiability of the given constraints and, if SAT, to propose a candidate "
+        "valuation that satisfies all constraints.\n\n"
         "Instructions:\n"
         "1) Constraint categories (analyze all carefully):\n"
         "   - Type: \"x instanceof Ljava/util/List;\" → x must have type Ljava/util/List;\n"
@@ -91,26 +91,24 @@ async def solve(req: SolveRequest):
         "   - Numeric: comparisons, arithmetic; keep numbers as JSON numbers.\n"
         "   - Type hierarchy: when provided, use it to ensure assigned reference types are compatible with inheritance.\n"
         "   - Heap state: when provided, use it to understand object relationships, aliasing, and heap structure.\n\n"
-        "2) Base valuation is a hint, not ground truth. Modify it minimally and consistently to satisfy constraints.\n"
-        "   Example: constraint \"cell(ref) == null\" with base \"cell(ref)\": 458 → return \"cell(ref)\": \"null\".\n\n"
-        "3) Assigning reference types (instanceof):\n"
+        "2) Assigning reference types (instanceof):\n"
         "   - Use FLAT keys with dot notation only, never nested.\n"
         "   - If \"obj(ref) instanceof LCar;\", set {\"obj(ref)\": \"LCar;\"}.\n"
         "   - Ensure the assigned type is allowed by the provided type_hierarchy (if any).\n"
         "   - When the constraint targets an INTERFACE or ABSTRACT type, prefer assigning a CONCRETE class that implements/extends it (i.e., return an instantiable class, not an interface/abstract).\n\n"
-        "4) Null handling for references:\n"
+        "3) Null handling for references:\n"
         "   - For any \"<name>(ref) == null\", set \"<name>(ref)\": \"null\" (string).\n"
         "   - Non-null constraints imply the key exists and is not \"null\".\n\n"
-        "5) Valuation construction:\n"
-        "   - Build on the base valuation; add or adjust only what is needed.\n"
+        "4) Valuation construction:\n"
+        "   - Provide any assignments needed to satisfy the constraints.\n"
         "   - Use dot-notation for fields: e.g., \"x.field\": 3, \"y.next(ref)\": \"LNode;\".\n"
         "   - Strings for types and \"null\"; keep numbers/booleans as native JSON types.\n\n"
-        "6) Output: return ONE top-level JSON object ONLY (no extra text/markdown). Allowed formats:\n"
+        "5) Output: return ONE top-level JSON object ONLY (no extra text/markdown). Allowed formats:\n"
         "   - SAT: {\"result\": \"SAT\", \"valuation\": [{...}, {...}]}\n"
         "     • \"valuation\" is an ARRAY; each element is a flat object for one symbolic entity.\n"
         "   - UNSAT: {\"result\": \"UNSAT\"}\n"
         "   - UNKNOWN: {\"result\": \"UNKNOWN\", \"raw\": \"short explanation\"}\n\n"
-        "7) Strict format requirements (guardrails):\n"
+        "6) Strict format requirements (guardrails):\n"
         "   - No nested objects inside valuation; flatten all properties into dot-notation keys.\n"
         "   - No keys other than \"result\", \"valuation\" (array), and optionally \"raw\" (string).\n"
         "   - Keep values JSON-safe; avoid quotes around numbers/booleans.\n"
@@ -132,8 +130,6 @@ async def solve(req: SolveRequest):
     )
 
     constraints_block = "\n".join(f"- {c}" for c in req.constraints)
-    valuation_block = "" if not req.valuation else "\n".join(f"{k} = {v}" for k, v in req.valuation.items())
-    
     # Build type hierarchy block if provided
     type_hierarchy_block = ""
     if req.type_hierarchy:
@@ -200,7 +196,6 @@ async def solve(req: SolveRequest):
         f"{type_hierarchy_block}"
         f"{heap_state_block}"
         f"Constraints:\n{constraints_block}\n\n"
-        f"Base valuation (may be empty):\n{valuation_block}\n\n"
         "Please produce JSON only. If uncertain, return {\"result\":\"UNKNOWN\", \"raw\": \"explain...\"}."
     )
     
