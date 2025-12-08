@@ -356,6 +356,12 @@ public abstract class AbstractPolymorphicInvocation {
    * Check if the method should be filtered out based on configuration.
    * Returns true if the method should be skipped (not analyzed for type constraints).
    * 
+   * Matching rules for package patterns:
+   * - "*" matches all classes (no filtering)
+   * - "com.example.*" matches all classes in package com.example and subpackages
+   * - "com.example.MyClass" matches exact class name
+   * - "MyClass" matches class name (works for default package)
+   * 
    * @param analysis Current concolic method explorer
    * @param callee The method being invoked
    * @return true if should filter (skip), false otherwise
@@ -383,26 +389,62 @@ public abstract class AbstractPolymorphicInvocation {
     }
     
     String className = declaringClass.getName();
-    String[] packages = config.getPolymorphicPackages();
+    String[] patterns = config.getPolymorphicPackages();
     
-    // If no packages configured, filter out everything (safe default)
-    if (packages == null || packages.length == 0) {
+    // If no patterns configured, filter out everything (safe default)
+    if (patterns == null || patterns.length == 0) {
       System.out.println("Polymorphic filter enabled but no packages configured, skipping method: " + callee.getFullName());
       return true;
     }
     
-    // Check if the class matches any of the configured packages
-    for (String pkg : packages) {
-      if (className.startsWith(pkg)) {
-        // Method is in target package, don't filter
+    // Check if the class matches any of the configured patterns
+    for (String pattern : patterns) {
+      if (matchesPattern(className, pattern)) {
+        // Method matches pattern, don't filter
         return false;
       }
     }
     
-    // Method is not in any target package, filter it out
+    // Method doesn't match any pattern, filter it out
     System.out.println("Filtering out polymorphic method call: " + callee.getFullName() + 
-        " (class: " + className + " not in target packages: " + java.util.Arrays.toString(packages) + ")");
+        " (class: " + className + " doesn't match patterns: " + java.util.Arrays.toString(patterns) + ")");
     return true;
+  }
+
+  /**
+   * Check if a class name matches a pattern.
+   * 
+   * Pattern rules:
+   * - "*" matches everything
+   * - "ClassName" matches exact class name
+   * - "com.example.*" matches package and all subpackages
+   * - "com.example.ClassName" matches exact fully qualified name
+   */
+  private boolean matchesPattern(String className, String pattern) {
+    // Match all
+    if ("*".equals(pattern)) {
+      return true;
+    }
+    
+    // Exact match
+    if (className.equals(pattern)) {
+      return true;
+    }
+    
+    // Wildcard pattern (e.g., "com.example.*")
+    if (pattern.endsWith(".*")) {
+      String prefix = pattern.substring(0, pattern.length() - 2);
+      return className.equals(prefix) || className.startsWith(prefix + ".");
+    }
+    
+    // Package/prefix match (e.g., "com.example")
+    if (className.startsWith(pattern)) {
+      // Either exact match or subpackage
+      return className.length() == pattern.length() || 
+             className.charAt(pattern.length()) == '.';
+    }
+    
+    return false;
   }
 
   /**
