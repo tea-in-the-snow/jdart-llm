@@ -14,18 +14,31 @@ and optional verification steps (e.g., re-check candidate valuations with a symb
 from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
-import re
 import json
 from datetime import datetime
 import os
+from json import JSONDecodeError
 
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 
 from config import OPENAI_API_KEY, LLM_MODEL, BASE_URL
 from logger import write_log
 
 app = FastAPI()
+
+
+def _extract_first_json(text: str):
+    """Return the first decodable JSON object/array in the text, or (None, None)."""
+    decoder = json.JSONDecoder()
+    for idx, ch in enumerate(text):
+        if ch in "{[":
+            try:
+                obj, end = decoder.raw_decode(text, idx)
+                return obj, text[idx:end]
+            except JSONDecodeError:
+                continue
+    return None, None
 
 class SolveRequest(BaseModel):
     constraints: List[str]
@@ -190,8 +203,6 @@ async def solve(req: SolveRequest):
         "Please produce JSON only. If uncertain, return {\"result\":\"UNKNOWN\", \"raw\": \"explain...\"}."
     )
     
-    # Full human message including system instructions (for LLM)
-    full_human_message = system_instructions + "\n\n" + human
     # Human message for logging (without system instructions)
     human_message_for_log = human
 
@@ -222,7 +233,10 @@ async def solve(req: SolveRequest):
     llm = ChatOpenAI(**llm_kwargs)
 
     try:
-        response = llm.invoke([HumanMessage(content=full_human_message)])
+        response = llm.invoke([
+            SystemMessage(content=system_instructions),
+            HumanMessage(content=human),
+        ])
         text = response.content if hasattr(response, 'content') else str(response)
         llm_message = text
     except Exception as e:
@@ -238,12 +252,10 @@ async def solve(req: SolveRequest):
         )
         return response_data
 
-    # Extract JSON object from the LLM output
-    m = re.search(r"\{.*\}", text, re.DOTALL)
-    if m:
-        json_str = m.group(0)
+    # Extract JSON object from the LLM output using a non-greedy decoder scan
+    parsed, json_str = _extract_first_json(text)
+    if parsed is not None:
         try:
-            parsed = json.loads(json_str)
             # Valuation should already be in array format as per the new instructions
             # Just validate it's an array if present
             if "valuation" in parsed and not isinstance(parsed["valuation"], list):
@@ -251,7 +263,7 @@ async def solve(req: SolveRequest):
                 parsed["valuation"] = [parsed["valuation"]]
             response_data = parsed
         except Exception as e:
-            response_data = {"result": "UNKNOWN", "raw": text, "parse_error": str(e)}
+            response_data = {"result": "UNKNOWN", "raw": json_str or text, "parse_error": str(e)}
     else:
         response_data = {"result": "UNKNOWN", "raw": text}
     
