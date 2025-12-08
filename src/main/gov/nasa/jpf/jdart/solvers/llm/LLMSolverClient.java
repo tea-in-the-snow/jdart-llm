@@ -16,8 +16,6 @@ import com.google.gson.JsonPrimitive;
 
 import gov.nasa.jpf.constraints.api.ConstraintSolver.Result;
 import gov.nasa.jpf.constraints.api.Expression;
-import gov.nasa.jpf.constraints.api.Valuation;
-import gov.nasa.jpf.constraints.api.ValuationEntry;
 
 /**
  * Client for communicating with the LLM solver service.
@@ -97,13 +95,12 @@ public class LLMSolverClient {
    * Solve high-level constraints using the LLM solver service.
    * 
    * @param hlExpressions High-level constraint expressions to solve
-   * @param val Current valuation (may be null)
    * @param heapState Heap state information (may be null)
    * @return LLM solver response containing result and optional valuation
    * @throws IOException if communication with LLM service fails
    */
-  public LLMSolverResponse solve(List<Expression<Boolean>> hlExpressions, Valuation val, JsonObject heapState) throws IOException {
-    String payload = buildJsonPayload(hlExpressions, val, heapState);
+  public LLMSolverResponse solve(List<Expression<Boolean>> hlExpressions, JsonObject heapState) throws IOException {
+    String payload = buildJsonPayload(hlExpressions, heapState);
     String responseBody = sendLlmRequest(payload);
     
     if (responseBody == null) {
@@ -117,16 +114,15 @@ public class LLMSolverClient {
    * Solve high-level constraints without heap state (backward compatibility).
    * 
    * @param hlExpressions High-level constraint expressions to solve
-   * @param val Current valuation (may be null)
    * @return LLM solver response containing result and optional valuation
    * @throws IOException if communication with LLM service fails
    */
-  public LLMSolverResponse solve(List<Expression<Boolean>> hlExpressions, Valuation val) throws IOException {
-    return solve(hlExpressions, val, null);
+  public LLMSolverResponse solve(List<Expression<Boolean>> hlExpressions) throws IOException {
+    return solve(hlExpressions, null);
   }
 
   /**
-   * Build JSON payload from high-level expressions, valuation, and heap state.
+  * Build JSON payload from high-level expressions and heap state.
    * Uses Gson for proper JSON serialization with automatic escaping.
    * 
    * The heap_state structure includes:
@@ -136,7 +132,7 @@ public class LLMSolverClient {
    * - allowed_to_allocate: whether new objects can be allocated
    * - schemas: class field schemas for LLM understanding
    */
-  private String buildJsonPayload(List<Expression<Boolean>> hlExpressions, Valuation val, JsonObject heapState) {
+  private String buildJsonPayload(List<Expression<Boolean>> hlExpressions, JsonObject heapState) {
     JsonObject payload = new JsonObject();
 
     // Build constraints array
@@ -145,44 +141,6 @@ public class LLMSolverClient {
       constraintsArray.add(new JsonPrimitive(expr.toString()));
     }
     payload.add("constraints", constraintsArray);
-
-    // Build valuation object
-    if (val == null) {
-      payload.add("valuation", null);
-    } else {
-      JsonObject valuationObj = new JsonObject();
-      for (ValuationEntry<?> entry : val.entries()) {
-        String varName = entry.getVariable().getName();
-        Object value = entry.getValue();
-        
-        // Convert value to appropriate JsonElement
-        if (value == null) {
-          valuationObj.add(varName, null);
-        } else if (value instanceof String) {
-          valuationObj.addProperty(varName, (String) value);
-        } else if (value instanceof Number) {
-          // Handle different number types
-          if (value instanceof Integer) {
-            valuationObj.addProperty(varName, (Integer) value);
-          } else if (value instanceof Long) {
-            valuationObj.addProperty(varName, (Long) value);
-          } else if (value instanceof Double) {
-            valuationObj.addProperty(varName, (Double) value);
-          } else if (value instanceof Float) {
-            valuationObj.addProperty(varName, (Float) value);
-          } else {
-            // For other number types, convert to string
-            valuationObj.addProperty(varName, value.toString());
-          }
-        } else if (value instanceof Boolean) {
-          valuationObj.addProperty(varName, (Boolean) value);
-        } else {
-          // For other types, convert to string
-          valuationObj.addProperty(varName, value.toString());
-        }
-      }
-      payload.add("valuation", valuationObj);
-    }
 
     // Add heap state if available
     if (heapState != null && heapState.entrySet().size() > 0) {

@@ -17,7 +17,6 @@ import gov.nasa.jpf.constraints.api.ConstraintSolver.Result;
 import gov.nasa.jpf.constraints.api.Expression;
 import gov.nasa.jpf.constraints.api.SolverContext;
 import gov.nasa.jpf.constraints.api.Valuation;
-import gov.nasa.jpf.constraints.api.ValuationEntry;
 import gov.nasa.jpf.constraints.api.Variable;
 import gov.nasa.jpf.constraints.util.ExpressionUtil;
 import gov.nasa.jpf.jdart.solvers.llm.LLMSolverClient.LLMSolverResponse;
@@ -122,7 +121,6 @@ public class LLMEnhancedSolverContext extends SolverContext {
 
   @Override
   public Result solve(Valuation val) {
-
     // If there are no high-level constraints in any scope, delegate to base solver.
     boolean hasHighLevel = highLevelStack.stream().anyMatch(list -> !list.isEmpty());
     if (!hasHighLevel) {
@@ -144,16 +142,16 @@ public class LLMEnhancedSolverContext extends SolverContext {
     logger.finer("hlExpressions: " + hlExpressions);
 
     // Print all symbolic variables' current values
-    if (val != null && !val.getVariables().isEmpty()) {
-      logger.finer("Current valuation before solving:");
-      for (ValuationEntry<?> entry : val.entries()) {
-        Variable<?> var = entry.getVariable();
-        Object value = entry.getValue();
-        logger.finer("  " + var.getName() + " (" + var.getType() + ") = " + value);
-      }
-    } else {
-      logger.finer("Current valuation is empty or null");
-    }
+    // if (val != null && !val.getVariables().isEmpty()) {
+    //   logger.finer("Current valuation before solving:");
+    //   for (ValuationEntry<?> entry : val.entries()) {
+    //     Variable<?> var = entry.getVariable();
+    //     Object value = entry.getValue();
+    //     logger.finer("  " + var.getName() + " (" + var.getType() + ") = " + value);
+    //   }
+    // } else {
+    //   logger.finer("Current valuation is empty or null");
+    // }
 
     if (hlExpressions.isEmpty()) {
       return baseResult;
@@ -184,7 +182,7 @@ public class LLMEnhancedSolverContext extends SolverContext {
       }
 
       // Send request to LLM solver
-      LLMSolverResponse response = llmClient.solve(hlExpressions, val, heapState);
+      LLMSolverResponse response = llmClient.solve(hlExpressions, heapState);
 
       // Update valuation if SAT
       if (response.getResult() == Result.SAT && response.getValuationArray() != null && val != null) {

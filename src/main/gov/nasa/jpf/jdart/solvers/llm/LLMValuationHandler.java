@@ -53,7 +53,7 @@ public class LLMValuationHandler {
       // Iterate through each key-value pair in the object
       for (Map.Entry<String, JsonElement> entry : valuationObj.entrySet()) {
         String varName = entry.getKey();
-        System.out.println("varName: " + varName);
+        // System.out.println("varName: " + varName);
         JsonElement valueElement = entry.getValue();
 
         // Find the corresponding Variable object
@@ -187,6 +187,8 @@ public class LLMValuationHandler {
         return;
       }
 
+      logger.finer("Creating new object of type " + className + " for variable " + varName);
+
       ElementInfo newObjectEi = heap.newObject(ci, ti);
 
       // Get the object reference (an int value representing the object ID in the
@@ -196,11 +198,12 @@ public class LLMValuationHandler {
       // Store the object reference in the valuation
       // Use setCastedValue to properly handle type conversion
       val.setCastedValue(var, objRef);
-      System.out.println(
-          "Updated variable " + varName + " = " + objRef + " (object reference for type " + typeSignature + ")");
+      logger.finer("Created new object of type " + className + " with reference " + objRef +
+          " for variable " + varName);
 
       // Symbolize the new object to track and collect constraints on its fields
       symbolizeNewObject(newObjectEi, varName, ti);
+      logger.finer("Symbolized new object of type " + className + " for variable " + varName);
     }
   }
 
