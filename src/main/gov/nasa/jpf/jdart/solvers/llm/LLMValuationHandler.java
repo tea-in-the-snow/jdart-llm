@@ -47,24 +47,36 @@ public class LLMValuationHandler {
     }
 
     // Iterate through each object in the valuation array
+    // New format: [{variable: "...", type: "...", newObject: true/false, trueRef: true/false, reference: ...}, ...]
     for (int i = 0; i < llmValuationArray.size(); i++) {
       JsonObject valuationObj = llmValuationArray.get(i).getAsJsonObject();
 
-      // Iterate through each key-value pair in the object
-      for (Map.Entry<String, JsonElement> entry : valuationObj.entrySet()) {
-        String varName = entry.getKey();
-        // System.out.println("varName: " + varName);
-        JsonElement valueElement = entry.getValue();
+      // Extract variable name and type from the new format
+      if (!valuationObj.has("variable")) {
+        logger.warning("Valuation entry missing 'variable' field, skipping: " + valuationObj);
+        continue;
+      }
 
-        // Find the corresponding Variable object
-        Variable<?> var = variableMap.get(varName);
-        if (var != null) {
-          updateVariableValue(var, varName, valueElement, val);
-          logger.finer("Updated variable " + varName + " with value from LLM response");
-        } else {
-          logger.warning("Variable " + varName + " not found in current valuation, skipping");
-          
-        }
+      String varName = valuationObj.get("variable").getAsString();
+      
+      // Get the type field (required for reference variables)
+      if (!valuationObj.has("type")) {
+        logger.warning("Valuation entry for variable " + varName + " missing 'type' field, skipping");
+        continue;
+      }
+
+      String typeStr = valuationObj.get("type").getAsString();
+
+      // Find the corresponding Variable object
+      Variable<?> var = variableMap.get(varName);
+      if (var != null) {
+        // For the new format, we only use 'type' field to update the variable
+        // Create a JsonPrimitive with the type string to pass to existing updateVariableValue method
+        JsonElement valueElement = new com.google.gson.JsonPrimitive(typeStr);
+        updateVariableValue(var, varName, valueElement, val);
+        logger.finer("Updated variable " + varName + " with type " + typeStr + " from LLM response");
+      } else {
+        logger.warning("Variable " + varName + " not found in current valuation, skipping");
       }
     }
   }

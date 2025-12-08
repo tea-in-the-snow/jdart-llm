@@ -27,27 +27,6 @@ from logger import write_log
 
 app = FastAPI()
 
-def flatten_valuation(valuation: Dict[str, Any], prefix: str = "") -> Dict[str, Any]:
-    """
-    Flatten a nested valuation dictionary into flat keys with dot notation.
-    Example: {"obj": {"<ref>": "LCar;"}} -> {"obj(ref)": "LCar;"}
-    """
-    if not isinstance(valuation, dict):
-        return valuation
-    
-    flattened = {}
-    for key, value in valuation.items():
-        new_key = f"{prefix}.{key}" if prefix else key
-        
-        if isinstance(value, dict):
-            # Recursively flatten nested dictionaries
-            flattened.update(flatten_valuation(value, new_key))
-        else:
-            # Leaf value, add to flattened dict
-            flattened[new_key] = value
-    
-    return flattened
-
 class SolveRequest(BaseModel):
     constraints: List[str]
     valuation: Optional[Dict[str, Any]] = None
@@ -63,7 +42,7 @@ async def solve(req: SolveRequest):
     # Prepare request data for logging
     request_data = {
         "constraints": req.constraints,
-        "valuation": req.valuation,
+        # "valuation": req.valuation,
         "type_hierarchy": req.type_hierarchy,
         "heap_state": req.heap_state
     }
@@ -92,36 +71,48 @@ async def solve(req: SolveRequest):
         "   - Type hierarchy: when provided, use it to ensure assigned reference types are compatible with inheritance.\n"
         "   - Heap state: when provided, use it to understand object relationships, aliasing, and heap structure.\n\n"
         "2) Assigning reference types (instanceof):\n"
-        "   - Use FLAT keys with dot notation only, never nested.\n"
-        "   - If \"obj(ref) instanceof LCar;\", set {\"obj(ref)\": \"LCar;\"}.\n"
-        "   - Ensure the assigned type is allowed by the provided type_hierarchy (if any).\n"
-        "   - When the constraint targets an INTERFACE or ABSTRACT type, prefer assigning a CONCRETE class that implements/extends it (i.e., return an instantiable class, not an interface/abstract).\n\n"
+        "   - When the constraint targets an INTERFACE or ABSTRACT type, prefer assigning a CONCRETE class that implements/extends it (i.e., return an instantiable class, not an interface/abstract).\n"
+        "   - Ensure the assigned type is allowed by the provided type_hierarchy (if any).\n\n"
         "3) Null handling for references:\n"
-        "   - For any \"<name>(ref) == null\", set \"<name>(ref)\": \"null\" (string).\n"
-        "   - Non-null constraints imply the key exists and is not \"null\".\n\n"
+        "   - For any \"<name>(ref) == null\", the reference should be null.\n"
+        "   - Non-null constraints imply the reference is not null.\n\n"
         "4) Valuation construction:\n"
-        "   - Provide any assignments needed to satisfy the constraints.\n"
-        "   - Use dot-notation for fields: e.g., \"x.field\": 3, \"y.next(ref)\": \"LNode;\".\n"
-        "   - Strings for types and \"null\"; keep numbers/booleans as native JSON types.\n\n"
-        "5) Output: return ONE top-level JSON object ONLY (no extra text/markdown). Allowed formats:\n"
+        "   - For each reference variable in the constraints, provide a complete description including:\n"
+        "     • variable: the variable name (e.g., \"head(ref)\", \"head(ref).next(ref)\")\n"
+        "     • type: the runtime type in JVM format (e.g., \"LNode;\", \"Ljava/util/ArrayList;\")\n"
+        "     • newObject: boolean indicating if this is a newly allocated object (true if not in heap_state)\n"
+        "     • trueRef: boolean indicating if 'reference' is a concrete address (false) or symbolic identifier (true for actual heap references)\n"
+        "     • reference: a unique identifier for the object (use integers 1, 2, 3... for new symbolic objects, or actual reference from heap_state)\n"
+        "   - Use dot-notation for nested field access: e.g., \"head(ref).next(ref).next(ref)\".\n"
+        "   - For numeric/boolean fields, include them as: {\"variable\": \"obj.field\", \"value\": <number or boolean>}\n\n"
+        "5) Output: return ONE top-level JSON object ONLY (no extra text/markdown/comments). Required format:\n"
         "   - SAT: {\"result\": \"SAT\", \"valuation\": [{...}, {...}]}\n"
-        "     • \"valuation\" is an ARRAY; each element is a flat object for one symbolic entity.\n"
+        "     • \"valuation\" is an ARRAY of objects, each describing one variable assignment\n"
+        "     • For reference variables: {\"variable\": \"...\", \"type\": \"...\", \"newObject\": true/false, \"trueRef\": true/false, \"reference\": <id>}\n"
+        "     • For primitive fields: {\"variable\": \"...\", \"value\": <value>}\n"
         "   - UNSAT: {\"result\": \"UNSAT\"}\n"
         "   - UNKNOWN: {\"result\": \"UNKNOWN\", \"raw\": \"short explanation\"}\n\n"
         "6) Strict format requirements (guardrails):\n"
-        "   - No nested objects inside valuation; flatten all properties into dot-notation keys.\n"
-        "   - No keys other than \"result\", \"valuation\" (array), and optionally \"raw\" (string).\n"
-        "   - Keep values JSON-safe; avoid quotes around numbers/booleans.\n"
+        "   - Each valuation entry must be a separate object in the array\n"
+        "   - No nested objects inside valuation entries\n"
+        "   - No HTML comments or markdown syntax in JSON output\n"
+        "   - Keep values JSON-safe; use true/false for booleans, numbers for integers\n"
         "   - If unsure, use UNKNOWN and place brief reasoning in \"raw\".\n\n"
         "Examples:\n"
-        "SAT example:\n"
+        "SAT example with reference chain:\n"
         "{\"result\":\"SAT\", \"valuation\": [\n"
-        "  {\"obj(ref)\": \"Ljava/lang/Object;\"},\n"
-        "  {\"cell(ref)\": \"null\", \"x.field\": 5}\n"
+        "  {\"variable\": \"head(ref)\", \"type\": \"LNode;\", \"newObject\": true, \"trueRef\": false, \"reference\": 1},\n"
+        "  {\"variable\": \"head(ref).next(ref)\", \"type\": \"LNode;\", \"newObject\": true, \"trueRef\": false, \"reference\": 2},\n"
+        "  {\"variable\": \"head(ref).next(ref).next(ref)\", \"type\": \"LNode;\", \"newObject\": true, \"trueRef\": false, \"reference\": 3}\n"
         "]}\n"
-        "Interface instanceof example (prefer concrete):\n"
+        "SAT example with null:\n"
         "{\"result\":\"SAT\", \"valuation\": [\n"
-        "  {\"list(ref)\": \"Ljava/util/ArrayList;\"}\n"
+        "  {\"variable\": \"head(ref)\", \"type\": \"null\", \"newObject\": false, \"trueRef\": true, \"reference\": null}\n"
+        "]}\n"
+        "SAT example with fields:\n"
+        "{\"result\":\"SAT\", \"valuation\": [\n"
+        "  {\"variable\": \"obj(ref)\", \"type\": \"LCar;\", \"newObject\": true, \"trueRef\": false, \"reference\": 1},\n"
+        "  {\"variable\": \"obj.speed\", \"value\": 60}\n"
         "]}\n"
         "UNSAT example:\n"
         "{\"result\":\"UNSAT\"}\n"
@@ -253,21 +244,11 @@ async def solve(req: SolveRequest):
         json_str = m.group(0)
         try:
             parsed = json.loads(json_str)
-            # Process valuation: convert to array format if needed
-            if "valuation" in parsed:
-                valuation = parsed["valuation"]
-                if isinstance(valuation, dict):
-                    # If LLM returned a single object, convert to array with one element
-                    # First flatten it, then wrap in array
-                    flattened = flatten_valuation(valuation)
-                    parsed["valuation"] = [flattened]
-                elif isinstance(valuation, list):
-                    # If already an array, flatten each object in the array
-                    parsed["valuation"] = [
-                        flatten_valuation(item) if isinstance(item, dict) else item
-                        for item in valuation
-                    ]
-                # If it's neither dict nor list, leave it as is (might be null or other type)
+            # Valuation should already be in array format as per the new instructions
+            # Just validate it's an array if present
+            if "valuation" in parsed and not isinstance(parsed["valuation"], list):
+                # If LLM didn't follow instructions and returned non-array, wrap it
+                parsed["valuation"] = [parsed["valuation"]]
             response_data = parsed
         except Exception as e:
             response_data = {"result": "UNKNOWN", "raw": text, "parse_error": str(e)}
