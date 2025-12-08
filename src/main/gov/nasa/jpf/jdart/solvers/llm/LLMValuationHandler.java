@@ -46,8 +46,11 @@ public class LLMValuationHandler {
       return;
     }
 
-    // Iterate through each object in the valuation array
-    // New format: [{variable: "...", type: "...", newObject: true/false, trueRef: true/false, reference: ...}, ...]
+    // Phase 1: Create all new objects (newObject: true) and build reference mapping
+    // Map from temporary reference ID to actual object reference
+    Map<Integer, Integer> tempRefToActualRef = new HashMap<>();
+    
+    // First pass: create all new objects (only once per unique reference ID)
     for (int i = 0; i < llmValuationArray.size(); i++) {
       JsonObject valuationObj = llmValuationArray.get(i).getAsJsonObject();
 
@@ -66,17 +69,103 @@ public class LLMValuationHandler {
       }
 
       String typeStr = valuationObj.get("type").getAsString();
+      
+      // Check if this is a new object
+      boolean isNewObject = false;
+      if (valuationObj.has("newObject")) {
+        isNewObject = valuationObj.get("newObject").getAsBoolean();
+      }
+      
+      // Get the temporary reference ID
+      Integer tempRefId = null;
+      if (valuationObj.has("reference") && !valuationObj.get("reference").isJsonNull()) {
+        tempRefId = valuationObj.get("reference").getAsInt();
+      }
 
       // Find the corresponding Variable object
       Variable<?> var = variableMap.get(varName);
-      if (var != null) {
-        // For the new format, we only use 'type' field to update the variable
-        // Create a JsonPrimitive with the type string to pass to existing updateVariableValue method
+      if (var == null) {
+        logger.warning("Variable " + varName + " not found in current valuation, skipping");
+        continue;
+      }
+
+      // Only process new objects in this phase
+      if (isNewObject && !"null".equals(typeStr)) {
+        // Check if we already created an object for this reference ID
+        if (tempRefId != null && tempRefToActualRef.containsKey(tempRefId)) {
+          // Reuse the existing object reference
+          int existingObjRef = tempRefToActualRef.get(tempRefId);
+          val.setCastedValue(var, existingObjRef);
+          logger.finer("Reusing existing object for variable " + varName + 
+                      ", temp ref " + tempRefId + " -> actual ref " + existingObjRef);
+        } else {
+          // Create a new object for this reference ID
+          JsonElement valueElement = new com.google.gson.JsonPrimitive(typeStr);
+          updateVariableValue(var, varName, valueElement, val);
+          
+          // Get the actual object reference that was created
+          Object actualValue = val.getValue(var);
+          if (actualValue instanceof Integer) {
+            int actualObjRef = (Integer) actualValue;
+            if (tempRefId != null) {
+              tempRefToActualRef.put(tempRefId, actualObjRef);
+              logger.finer("Created new object for variable " + varName + " with type " + typeStr + 
+                          ", temp ref " + tempRefId + " -> actual ref " + actualObjRef);
+            }
+          }
+        }
+      } else if ("null".equals(typeStr)) {
+        // Handle null references
         JsonElement valueElement = new com.google.gson.JsonPrimitive(typeStr);
         updateVariableValue(var, varName, valueElement, val);
-        logger.finer("Updated variable " + varName + " with type " + typeStr + " from LLM response");
+        logger.finer("Set variable " + varName + " to null");
+      }
+    }
+    
+    // Phase 2: Update valuation for nested field references
+    // For variables like "obj.next(ref)" that reference other objects,
+    // we need to add them to the valuation with the actual reference values
+    logger.finer("Reference mapping created with " + tempRefToActualRef.size() + " entries");
+    
+    // Second pass: set valuation for nested field references
+    for (int i = 0; i < llmValuationArray.size(); i++) {
+      JsonObject valuationObj = llmValuationArray.get(i).getAsJsonObject();
+      
+      if (!valuationObj.has("variable")) {
+        continue;
+      }
+      
+      String varName = valuationObj.get("variable").getAsString();
+      
+      // Check if this variable represents a field access (contains a dot)
+      // e.g., "head(ref).next(ref)" means the 'next' field of 'head' object
+      if (!varName.contains(".")) {
+        continue; // This is a root variable, already handled in phase 1
+      }
+      
+      // Get the reference ID that this field should point to
+      if (!valuationObj.has("reference") || valuationObj.get("reference").isJsonNull()) {
+        continue; // No reference to set
+      }
+      
+      Integer tempRefId = valuationObj.get("reference").getAsInt();
+      Integer actualRefValue = tempRefToActualRef.get(tempRefId);
+      
+      if (actualRefValue == null) {
+        logger.warning("Could not find actual reference for temp ref " + tempRefId + " in variable " + varName);
+        continue;
+      }
+      
+      // Find the corresponding Variable object for this nested field
+      Variable<?> var = variableMap.get(varName);
+      if (var != null) {
+        // Add the actual reference value to the valuation
+        // JDart will automatically handle setting the field value based on this
+        val.setCastedValue(var, actualRefValue);
+        logger.finer("Set valuation for " + varName + " to reference " + actualRefValue + 
+                    " (from temp ref " + tempRefId + ")");
       } else {
-        logger.warning("Variable " + varName + " not found in current valuation, skipping");
+        logger.warning("Variable " + varName + " not found in variable map, skipping");
       }
     }
   }
