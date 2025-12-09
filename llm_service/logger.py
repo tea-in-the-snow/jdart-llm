@@ -5,7 +5,7 @@ Generates log files in the log directory with request/response information.
 
 import os
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import json
 import glob
 
@@ -104,7 +104,8 @@ def format_log_entry(
     request: Dict[str, Any],
     response: Dict[str, Any],
     human_message: Optional[str] = None,
-    llm_message: Optional[str] = None
+    llm_message: Optional[str] = None,
+    conversation_logs: Optional[List[Dict[str, Any]]] = None
 ) -> str:
     """
     Format a log entry with all the required information.
@@ -146,6 +147,34 @@ def format_log_entry(
         log_lines.append("```")
         log_lines.append(llm_message)
         log_lines.append("```")
+
+    if conversation_logs:
+        log_lines.append("[AgentConversations]")
+        for idx, convo in enumerate(conversation_logs, start=1):
+            agent = convo.get("agent", "unknown")
+            stage = convo.get("stage", "")
+            iteration = convo.get("iteration")
+
+            header_parts = [f"Agent: {agent}"]
+            if stage:
+                header_parts.append(f"Stage: {stage}")
+            if iteration is not None:
+                header_parts.append(f"Iteration: {iteration}")
+
+            log_lines.append(f"[Conversation {idx}] " + " | ".join(header_parts))
+
+            for field_name, label in (("system", "[system]"), ("human", "[human]"), ("response", "[response]")):
+                content = convo.get(field_name)
+                if content:
+                    log_lines.append(label)
+                    log_lines.append("```")
+                    log_lines.append(str(content))
+                    log_lines.append("```")
+
+            error = convo.get("error")
+            if error:
+                log_lines.append("[error]")
+                log_lines.append(str(error))
     
     return "\n".join(log_lines)
 
@@ -156,7 +185,8 @@ def write_log(
     started_time: datetime,
     ended_time: datetime,
     human_message: Optional[str] = None,
-    llm_message: Optional[str] = None
+    llm_message: Optional[str] = None,
+    conversation_logs: Optional[List[Dict[str, Any]]] = None
 ) -> str:
     """
     Write a log entry to a file.
@@ -185,7 +215,8 @@ def write_log(
         request=request,
         response=response,
         human_message=human_message,
-        llm_message=llm_message
+        llm_message=llm_message,
+        conversation_logs=conversation_logs
     )
     
     log_file = generate_log_filename(started_time, session_dir)

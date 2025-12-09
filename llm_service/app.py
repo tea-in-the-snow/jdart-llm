@@ -101,6 +101,7 @@ async def solve(req: SolveRequest):
     llm = ChatOpenAI(**llm_kwargs)
     
     # Run multi-agent orchestrator
+    conversation_logs = None
     try:
         orchestrator = MultiAgentOrchestrator(llm=llm, max_retries=2)
         response_data = orchestrator.solve(
@@ -110,9 +111,12 @@ async def solve(req: SolveRequest):
             context=ctx_content,
         )
         llm_message = response_data.get("raw", "")
+        conversation_logs = orchestrator.conversation_logs
     except Exception as e:
         response_data = {"result": "UNKNOWN", "error": str(e)}
         llm_message = None
+        if 'orchestrator' in locals():
+            conversation_logs = getattr(orchestrator, "conversation_logs", None)
     
     ended_time = datetime.now()
     
@@ -124,6 +128,7 @@ async def solve(req: SolveRequest):
         ended_time=ended_time,
         human_message=f"Constraints: {req.constraints}",
         llm_message=llm_message,
+        conversation_logs=conversation_logs,
     )
     
     return response_data
