@@ -29,6 +29,7 @@ public class LLMEnhancedSolverContext extends SolverContext {
   private final SolverContext baseSolverContext;
   private final LLMSolverClient llmClient;
   private final HeapStateCollector heapCollector;
+  private final SourceContextCollector sourceCollector;
   private JPFLogger logger = JPF.getLogger("jdart");
 
   /**
@@ -42,6 +43,7 @@ public class LLMEnhancedSolverContext extends SolverContext {
     this.baseSolverContext = baseSolverContext;
     this.llmClient = LLMSolverClient.createDefault();
     this.heapCollector = HeapStateCollector.createDefault();
+    this.sourceCollector = SourceContextCollector.createDefault();
     // initialize base scope for high-level constraints
     // this.highLevelStack.push(new ArrayList<>());
     this.hlFreeVarsStack.push(new HashMap<String, Variable<?>>());
@@ -158,9 +160,10 @@ public class LLMEnhancedSolverContext extends SolverContext {
     }
 
     try {
-      // Collect heap state and parameter type constraints from current execution context
+      // Collect heap state, parameter type constraints, and source context from current execution context
       JsonObject heapState = null;
       Map<String, String> parameterTypeConstraints = new HashMap<>();
+      JsonObject sourceContext = null;
       
       try {
         ThreadInfo ti = VM.getVM().getCurrentThread();
@@ -171,6 +174,13 @@ public class LLMEnhancedSolverContext extends SolverContext {
           if (currentAnalysis != null) {
             parameterTypeConstraints = currentAnalysis.getParameterTypeConstraints();
             logger.finer("Collected parameter type constraints: " + parameterTypeConstraints);
+          }
+          
+          // Collect source context (prefer the target method if available)
+          sourceContext = sourceCollector.collectSourceContext(ti, currentAnalysis, hlExpressions, parameterTypeConstraints);
+          if (sourceContext != null) {
+            logger.finer("Collected source context for method: " + 
+                sourceContext.get("method_name").getAsString());
           }
           
           // Pass high-level expressions for constraint-aware heap slicing
@@ -187,12 +197,12 @@ public class LLMEnhancedSolverContext extends SolverContext {
           }
         }
       } catch (Exception e) {
-        logger.warning("Failed to collect heap state or parameter types: " + e.getMessage());
-        // Continue without heap state or parameter types
+        logger.warning("Failed to collect heap state, parameter types, or source context: " + e.getMessage());
+        // Continue without heap state, parameter types, or source context
       }
 
-      // Send request to LLM solver with parameter type constraints
-      LLMSolverResponse response = llmClient.solve(hlExpressions, heapState, parameterTypeConstraints);
+      // Send request to LLM solver with parameter type constraints and source context
+      LLMSolverResponse response = llmClient.solve(hlExpressions, heapState, parameterTypeConstraints, sourceContext);
 
       // Update valuation if SAT
       if (response.getResult() == Result.SAT && response.getValuationArray() != null && val != null) {

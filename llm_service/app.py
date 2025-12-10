@@ -41,6 +41,7 @@ class SolveRequest(BaseModel):
     type_hierarchy: Optional[Dict[str, str]] = None
     heap_state: Optional[Dict[str, Any]] = None
     parameter_type_constraints: Optional[Dict[str, str]] = None
+    source_context: Optional[Dict[str, Any]] = None
     max_tokens: Optional[int] = 512
     temperature: Optional[float] = 0.0
 
@@ -63,6 +64,7 @@ async def solve(req: SolveRequest):
         "type_hierarchy": req.type_hierarchy,
         "heap_state": req.heap_state,
         "parameter_type_constraints": req.parameter_type_constraints,
+        "source_context": req.source_context,
     }
     
     # Read the content of ctx.md file as reference information
@@ -111,6 +113,7 @@ async def solve(req: SolveRequest):
             type_hierarchy=req.type_hierarchy,
             heap_state=req.heap_state,
             parameter_type_constraints=req.parameter_type_constraints,
+            source_context=req.source_context,
             context=ctx_content,
         )
         llm_message = response_data.get("raw", "")

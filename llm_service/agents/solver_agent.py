@@ -39,6 +39,7 @@ class SolverAgent:
         type_hierarchy: Optional[Dict[str, str]] = None,
         heap_state: Optional[Dict[str, Any]] = None,
         parameter_type_constraints: Optional[Dict[str, str]] = None,
+        source_context: Optional[Dict[str, Any]] = None,
         context: str = "",
     ) -> Tuple[Optional[Dict], str, Dict[str, Any]]:
         """
@@ -53,6 +54,7 @@ class SolverAgent:
             type_hierarchy: Optional dict mapping variable names to type information
             heap_state: Optional dict with "aliases" and "objects" keys describing heap
             parameter_type_constraints: Optional dict mapping parameter names to their static types
+            source_context: Optional dict with source code context (method_source, class_source, line_numbers, etc.)
             context: Optional reference information string
         
         Returns:
@@ -95,6 +97,12 @@ class SolverAgent:
             "3. For field access chains, use the exact dot notation from constraints (e.g., 'head(ref).next(ref).next(ref)')\n"
             "4. If you need to represent an object's fields, describe them as part of the constraint-based variable\n"
             "5. Each unique variable from constraints gets ONE entry in the valuation\n\n"
+            "TYPE DETERMINATION RULES:\n"
+            "When determining the type for a reference variable (e.g., \"x(ref) instance A\"):\n"
+            "1. If type A has subclasses (e.g., A1, A2), prefer using the PARENT type A unless constraints explicitly require a subclass\n"
+            "2. Only use a subclass type if the constraints specifically require features unique to that subclass\n"
+            "3. The general principle is: use the most general (parent) type that satisfies all constraints\n"
+            "4. Example: If \"x(ref) instance A\" and A has subclass A1, use type A in the valuation, not A1\n\n"
             "EXAMPLES:\n"
             "✓ CORRECT: {\"variable\": \"head(ref)\", ...}\n"
             "✓ CORRECT: {\"variable\": \"head(ref).next(ref)\", ...}\n"
@@ -125,6 +133,38 @@ class SolverAgent:
             for var_name, type_info in type_hierarchy.items():
                 type_hierarchy_block += f"\nVariable: {var_name}\n{type_info}\n"
             type_hierarchy_block += "\n"
+        
+        source_context_block = ""
+        if source_context:
+            source_context_block = "Source Code Context:\n"
+            source_context_block += "This is the actual source code of the method and class being analyzed.\n"
+            source_context_block += "Use this to understand the code structure, logic, and relationships.\n\n"
+            
+            if "method_name" in source_context:
+                source_context_block += f"Method: {source_context['method_name']}\n"
+            if "class_name" in source_context:
+                source_context_block += f"Class: {source_context['class_name']}\n"
+            if "source_file" in source_context:
+                source_context_block += f"File: {source_context['source_file']}\n"
+            
+            if "line_numbers" in source_context:
+                line_info = source_context["line_numbers"]
+                if isinstance(line_info, dict):
+                    source_context_block += f"Lines: {line_info.get('method_start', '?')}-{line_info.get('method_end', '?')}\n"
+            
+            source_context_block += "\n"
+            
+            if "method_source" in source_context and source_context["method_source"]:
+                source_context_block += "Method Source Code:\n"
+                source_context_block += "```java\n"
+                source_context_block += source_context["method_source"]
+                source_context_block += "```\n\n"
+            
+            if "class_source" in source_context and source_context["class_source"]:
+                source_context_block += "Complete Class Source Code:\n"
+                source_context_block += "```java\n"
+                source_context_block += source_context["class_source"]
+                source_context_block += "```\n\n"
         
         heap_state_block = ""
         if heap_state:
@@ -159,6 +199,7 @@ class SolverAgent:
         
         human_prompt = (
             f"{context_block}"
+            f"{source_context_block}"
             f"{param_type_block}"
             f"{type_hierarchy_block}"
             f"{heap_state_block}"

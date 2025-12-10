@@ -92,7 +92,31 @@ public class LLMSolverClient {
   }
 
   /**
-   * Solve high-level constraints using the LLM solver service with parameter type constraints.
+   * Solve high-level constraints using LLM service.
+   * Sends HTTP POST request with JSON payload and parses response.
+   * 
+   * @param hlExpressions High-level constraint expressions to solve
+   * @param heapState Heap state information (may be null)
+   * @param parameterTypeConstraints Parameter type constraints from method signature
+   * @param sourceContext Source code context for the method being analyzed (may be null)
+   * @return LLM solver response containing result and optional valuation
+   * @throws IOException if communication with LLM service fails
+   */
+  public LLMSolverResponse solve(List<Expression<Boolean>> hlExpressions, JsonObject heapState, 
+                                 java.util.Map<String, String> parameterTypeConstraints,
+                                 JsonObject sourceContext) throws IOException {
+    String payload = buildJsonPayload(hlExpressions, heapState, parameterTypeConstraints, sourceContext);
+    String responseBody = sendLlmRequest(payload);
+    
+    if (responseBody == null) {
+      return new LLMSolverResponse(Result.DONT_KNOW, null);
+    }
+    
+    return parseLlmResponse(responseBody);
+  }
+
+  /**
+   * Solve high-level constraints using the LLM solver service with parameter type constraints (backward compatibility).
    * 
    * @param hlExpressions High-level constraint expressions to solve
    * @param heapState Heap state information (may be null)
@@ -102,14 +126,7 @@ public class LLMSolverClient {
    */
   public LLMSolverResponse solve(List<Expression<Boolean>> hlExpressions, JsonObject heapState, 
                                  java.util.Map<String, String> parameterTypeConstraints) throws IOException {
-    String payload = buildJsonPayload(hlExpressions, heapState, parameterTypeConstraints);
-    String responseBody = sendLlmRequest(payload);
-    
-    if (responseBody == null) {
-      return new LLMSolverResponse(Result.DONT_KNOW, null);
-    }
-    
-    return parseLlmResponse(responseBody);
+    return solve(hlExpressions, heapState, parameterTypeConstraints, null);
   }
   
   /**
@@ -121,7 +138,7 @@ public class LLMSolverClient {
    * @throws IOException if communication with LLM service fails
    */
   public LLMSolverResponse solve(List<Expression<Boolean>> hlExpressions, JsonObject heapState) throws IOException {
-    return solve(hlExpressions, heapState, null);
+    return solve(hlExpressions, heapState, null, null);
   }
   
   /**
@@ -132,11 +149,11 @@ public class LLMSolverClient {
    * @throws IOException if communication with LLM service fails
    */
   public LLMSolverResponse solve(List<Expression<Boolean>> hlExpressions) throws IOException {
-    return solve(hlExpressions, null, null);
+    return solve(hlExpressions, null, null, null);
   }
 
   /**
-  * Build JSON payload from high-level expressions, heap state, and parameter type constraints.
+  * Build JSON payload from high-level expressions, heap state, parameter type constraints, and source context.
    * Uses Gson for proper JSON serialization with automatic escaping.
    * 
    * The heap_state structure includes:
@@ -149,9 +166,15 @@ public class LLMSolverClient {
    * The parameter_type_constraints provides implicit type constraints:
    * - Maps parameter names to their static declared types (e.g., "node" -> "ListNode")
    * - Informs the LLM about polymorphic type constraints (actual type must be subtype of declared type)
+   * 
+   * The source_context provides source code for better LLM understanding:
+   * - method_source: source code of the method being analyzed
+   * - class_source: full source code of the class
+   * - line_numbers: line number information for the method
    */
   private String buildJsonPayload(List<Expression<Boolean>> hlExpressions, JsonObject heapState,
-                                   java.util.Map<String, String> parameterTypeConstraints) {
+                                   java.util.Map<String, String> parameterTypeConstraints,
+                                   JsonObject sourceContext) {
     JsonObject payload = new JsonObject();
 
     // Build constraints array
@@ -175,17 +198,15 @@ public class LLMSolverClient {
       payload.add("parameter_type_constraints", paramTypesJson);
     }
 
+    // Add source context if available
+    if (sourceContext != null && sourceContext.entrySet().size() > 0) {
+      payload.add("source_context", sourceContext);
+    }
+
     // Add optional hint field
     payload.addProperty("hint", "java-jdart-llm-high-level-constraints");
 
     return gson.toJson(payload);
-  }
-  
-  /**
-   * Backward compatibility method without parameter type constraints.
-   */
-  private String buildJsonPayload(List<Expression<Boolean>> hlExpressions, JsonObject heapState) {
-    return buildJsonPayload(hlExpressions, heapState, null);
   }
 
   /**

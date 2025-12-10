@@ -143,8 +143,12 @@ public abstract class AbstractPolymorphicInvocation {
         String methodName = callee.getName();
         String methodSignature = callee.getSignature();
 
-        // Get the static declared type
-        ClassInfo declaredType = callee.getClassInfo();
+        // Resolve the declared type from the bytecode reference, not the dispatched target,
+        // so we keep a stable type list across re-executions.
+        ClassInfo declaredType = resolveDeclaredClass(ti);
+        if (declaredType == null) {
+          declaredType = callee.getClassInfo();
+        }
         ClassInfo actualType = ti.getClassInfo(objRef);
 
         // Generate cache key for this call site
@@ -153,13 +157,16 @@ public abstract class AbstractPolymorphicInvocation {
         String cacheKey = getCacheKey(sf.getMethodInfo(), getPosition(), 
             getClassName() + "." + getMethodName() + getMethodSignature());
 
-        // Check if this is the first visit to this decision point
-        boolean isFirstVisit = analysis.needsDecisions();
+        // We want to compute and log the possible types only once per call site,
+        // but we might still need to rebuild constraints on later runs when the
+        // explorer asks for fresh decisions.
+        boolean needConstraints = analysis.needsDecisions();
+        boolean firstVisitForSite = !possibleTypesCache.containsKey(cacheKey);
         
         // Get or compute possible types
         List<ClassInfo> possibleTypes;
-        if (isFirstVisit) {
-          // First visit: collect and cache possible types
+        if (firstVisitForSite) {
+          // First visit to this call site: collect and cache possible types
           possibleTypes = collectPossibleImplementingTypes(
               ti, declaredType, actualType, methodName, methodSignature);
 
@@ -185,31 +192,46 @@ public abstract class AbstractPolymorphicInvocation {
           }
         }
 
-        if (!possibleTypes.isEmpty()) {
-          // Build constraints only on first visit to this decision point
-          Expression<Boolean>[] constraints = null;
-          
-          if (isFirstVisit) {
-            System.out.println("\n\n++++++++++++++++++++++++++++++++++++++++++++++");
-            System.out.println(getInstructionName() + ": collecting constraints for method call to " + getMethodName());
+        // If a new runtime type shows up that we did not cache before, add it once
+        if (!firstVisitForSite && actualType != null && findTypeIndex(possibleTypes, actualType) < 0) {
+          List<ClassInfo> updated = new ArrayList<>(possibleTypes);
+          updated.add(actualType);
+          updated.sort(this::compareBySpecificity);
+          possibleTypesCache.put(cacheKey, new ArrayList<>(updated));
+          possibleTypes = updated;
+        }
 
-            // Debug output of possible types
-            System.out.println();
-            System.out.println("Possible types implementing " + callee.getFullName() + ":");
-            for (ClassInfo ci : possibleTypes) {
-              System.out.println("  Possible type: " + ci.getName());
+        if (!possibleTypes.isEmpty()) {
+          // Build constraints when the explorer requests them; log only on the
+          // first visit to this call site to avoid duplicate "collecting constraints"
+          // banners on subsequent replays.
+          Expression<Boolean>[] constraints = null;
+
+          if (needConstraints) {
+            if (firstVisitForSite) {
+              System.out.println("\n\n++++++++++++++++++++++++++++++++++++++++++++++");
+              System.out.println(getInstructionName() + ": collecting constraints for method call to " + getMethodName());
+
+              // Debug output of possible types
+              System.out.println();
+              System.out.println("Possible types implementing " + callee.getFullName() + ":");
+              for (ClassInfo ci : possibleTypes) {
+                System.out.println("  Possible type: " + ci.getName());
+              }
+              System.out.println();
             }
-            System.out.println();
 
             constraints = buildExclusiveTypeConstraints(symbolicObjRef, possibleTypes);
 
-            System.out.println("Generated instanceof constraints for " + getInstructionName() + ":");
-            for (int i = 0; i < constraints.length; i++) {
-              System.out.println("  Branch " + i + ": " + constraints[i]);
-            }
-            System.out.println();
+            if (firstVisitForSite) {
+              System.out.println("Generated instanceof constraints for " + getInstructionName() + ":");
+              for (int i = 0; i < constraints.length; i++) {
+                System.out.println("  Branch " + i + ": " + constraints[i]);
+              }
+              System.out.println();
 
-            System.out.println("++++++++++++++++++++++++++++++++++++++++++++++\n\n");
+              System.out.println("++++++++++++++++++++++++++++++++++++++++++++++\n\n");
+            }
           }
 
           // Determine branch index based on actual runtime type
@@ -230,7 +252,7 @@ public abstract class AbstractPolymorphicInvocation {
           // On re-execution: constraints is null, but branchIdx is validated against expectedPath
           analysis.decision(ti, instruction, branchIdx, constraints);
 
-          if (isFirstVisit && actualType != null) {
+          if (firstVisitForSite && actualType != null) {
             System.out.println(
                 getInstructionName() + " instanceof constraints: " + possibleTypes.size() +
                     " possible types for method " + callee.getFullName() +
@@ -250,6 +272,18 @@ public abstract class AbstractPolymorphicInvocation {
    */
   protected String getCacheKey(MethodInfo callerMethod, int position, String targetMethod) {
     return callerMethod.getFullName() + "@" + position + "->" + targetMethod;
+  }
+
+  /**
+   * Resolve the declared class for this instruction from the bytecode reference.
+   * Falls back to null if resolution fails so callers can still use the runtime type.
+   */
+  protected ClassInfo resolveDeclaredClass(ThreadInfo ti) {
+    try {
+      return ti.resolveReferencedClass(getClassName());
+    } catch (Throwable e) {
+      return null;
+    }
   }
 
   /**

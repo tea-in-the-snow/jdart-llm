@@ -42,6 +42,7 @@ class RefinerAgent:
         type_hierarchy: Optional[Dict[str, str]] = None,
         heap_state: Optional[Dict[str, Any]] = None,
         parameter_type_constraints: Optional[Dict[str, str]] = None,
+        source_context: Optional[Dict[str, Any]] = None,
         context: str = "",
     ) -> Tuple[Optional[Dict], str, Dict[str, Any]]:
         """
@@ -62,6 +63,7 @@ class RefinerAgent:
             type_hierarchy: Optional dict mapping variable names to type information
             heap_state: Optional dict with "aliases" and "objects" keys
             parameter_type_constraints: Optional dict mapping parameter names to their static types
+            source_context: Optional dict with source code context (method_source, class_source, etc.)
             context: Optional reference information string
         
         Returns:
@@ -127,6 +129,19 @@ class RefinerAgent:
                 type_hierarchy_block += f"\nVariable: {var_name}\n{type_info}\n"
             type_hierarchy_block += "\n"
         
+        source_context_block = ""
+        if source_context:
+            source_context_block = "Source Code Context:\n"
+            if "method_name" in source_context:
+                source_context_block += f"Method: {source_context['method_name']}\n"
+            if "class_name" in source_context:
+                source_context_block += f"Class: {source_context['class_name']}\n"
+            
+            if "method_source" in source_context and source_context["method_source"]:
+                source_context_block += "\nMethod Source Code:\n```java\n"
+                source_context_block += source_context["method_source"]
+                source_context_block += "```\n\n"
+        
         heap_state_block = ""
         if heap_state:
             heap_state_block = "Heap State Information:\n"
@@ -146,6 +161,7 @@ class RefinerAgent:
         
         human_prompt = (
             f"{context_block}"
+            f"{source_context_block}"
             f"{param_type_block}"
             f"{type_hierarchy_block}"
             f"{heap_state_block}"
