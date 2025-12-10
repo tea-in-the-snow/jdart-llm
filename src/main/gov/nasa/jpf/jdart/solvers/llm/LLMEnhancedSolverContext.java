@@ -158,11 +158,21 @@ public class LLMEnhancedSolverContext extends SolverContext {
     }
 
     try {
-      // Collect heap state from current execution context
+      // Collect heap state and parameter type constraints from current execution context
       JsonObject heapState = null;
+      Map<String, String> parameterTypeConstraints = new HashMap<>();
+      
       try {
         ThreadInfo ti = VM.getVM().getCurrentThread();
         if (ti != null) {
+          // Get parameter type constraints from the current analysis
+          gov.nasa.jpf.jdart.ConcolicMethodExplorer currentAnalysis = 
+              gov.nasa.jpf.jdart.ConcolicMethodExplorer.getCurrentAnalysis(ti);
+          if (currentAnalysis != null) {
+            parameterTypeConstraints = currentAnalysis.getParameterTypeConstraints();
+            logger.finer("Collected parameter type constraints: " + parameterTypeConstraints);
+          }
+          
           // Pass high-level expressions for constraint-aware heap slicing
           heapState = heapCollector.collectHeapState(ti, val, hlExpressions);
           if (heapState != null) {
@@ -177,12 +187,12 @@ public class LLMEnhancedSolverContext extends SolverContext {
           }
         }
       } catch (Exception e) {
-        logger.warning("Failed to collect heap state: " + e.getMessage());
-        // Continue without heap state
+        logger.warning("Failed to collect heap state or parameter types: " + e.getMessage());
+        // Continue without heap state or parameter types
       }
 
-      // Send request to LLM solver
-      LLMSolverResponse response = llmClient.solve(hlExpressions, heapState);
+      // Send request to LLM solver with parameter type constraints
+      LLMSolverResponse response = llmClient.solve(hlExpressions, heapState, parameterTypeConstraints);
 
       // Update valuation if SAT
       if (response.getResult() == Result.SAT && response.getValuationArray() != null && val != null) {

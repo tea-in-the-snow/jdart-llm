@@ -75,6 +75,7 @@ class MultiAgentOrchestrator:
         constraints: List[str],
         type_hierarchy: Optional[Dict[str, str]] = None,
         heap_state: Optional[Dict[str, Any]] = None,
+        parameter_type_constraints: Optional[Dict[str, str]] = None,
         context: str = "",
     ) -> Dict[str, Any]:
         """
@@ -92,6 +93,7 @@ class MultiAgentOrchestrator:
             constraints: List of constraint strings to satisfy
             type_hierarchy: Optional dict mapping variables to type information
             heap_state: Optional dict with "aliases" and "objects" keys
+            parameter_type_constraints: Optional dict mapping parameter names to their static types
             context: Optional reference information string
         
         Returns:
@@ -126,6 +128,7 @@ class MultiAgentOrchestrator:
                     constraints=constraints,
                     type_hierarchy=type_hierarchy,
                     heap_state=heap_state,
+                    parameter_type_constraints=parameter_type_constraints,
                     context=context,
                 )
                 if solver_log:
@@ -139,6 +142,7 @@ class MultiAgentOrchestrator:
                     error_report=error_report,
                     type_hierarchy=type_hierarchy,
                     heap_state=heap_state,
+                    parameter_type_constraints=parameter_type_constraints,
                     context=context,
                 )
                 if refiner_log:

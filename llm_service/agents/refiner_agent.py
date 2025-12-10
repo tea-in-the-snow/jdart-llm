@@ -41,6 +41,7 @@ class RefinerAgent:
         error_report: str,
         type_hierarchy: Optional[Dict[str, str]] = None,
         heap_state: Optional[Dict[str, Any]] = None,
+        parameter_type_constraints: Optional[Dict[str, str]] = None,
         context: str = "",
     ) -> Tuple[Optional[Dict], str, Dict[str, Any]]:
         """
@@ -60,6 +61,7 @@ class RefinerAgent:
             error_report: String describing what was wrong with the output
             type_hierarchy: Optional dict mapping variable names to type information
             heap_state: Optional dict with "aliases" and "objects" keys
+            parameter_type_constraints: Optional dict mapping parameter names to their static types
             context: Optional reference information string
         
         Returns:
@@ -107,6 +109,17 @@ class RefinerAgent:
         
         constraints_block = "\n".join(f"- {c}" for c in constraints)
         
+        # Build parameter type constraints block (implicit constraints)
+        param_type_block = ""
+        if parameter_type_constraints:
+            param_type_block = "Parameter Type Constraints (Implicit):\n"
+            param_type_block += "These are the declared static types of method parameters. "
+            param_type_block += "The actual runtime type must be a subtype of the declared type.\n\n"
+            for param_name, declared_type in parameter_type_constraints.items():
+                param_type_block += f"  {param_name}: declared type is {declared_type}\n"
+            param_type_block += "\n"
+            param_type_block += "When correcting the valuation, ensure type compatibility with declared types.\n\n"
+        
         type_hierarchy_block = ""
         if type_hierarchy:
             type_hierarchy_block = "Type Hierarchy Information:\n"
@@ -133,6 +146,7 @@ class RefinerAgent:
         
         human_prompt = (
             f"{context_block}"
+            f"{param_type_block}"
             f"{type_hierarchy_block}"
             f"{heap_state_block}"
             f"Constraints:\n{constraints_block}\n\n"

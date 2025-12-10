@@ -92,15 +92,17 @@ public class LLMSolverClient {
   }
 
   /**
-   * Solve high-level constraints using the LLM solver service.
+   * Solve high-level constraints using the LLM solver service with parameter type constraints.
    * 
    * @param hlExpressions High-level constraint expressions to solve
    * @param heapState Heap state information (may be null)
+   * @param parameterTypeConstraints Map from parameter names to their static types (may be null)
    * @return LLM solver response containing result and optional valuation
    * @throws IOException if communication with LLM service fails
    */
-  public LLMSolverResponse solve(List<Expression<Boolean>> hlExpressions, JsonObject heapState) throws IOException {
-    String payload = buildJsonPayload(hlExpressions, heapState);
+  public LLMSolverResponse solve(List<Expression<Boolean>> hlExpressions, JsonObject heapState, 
+                                 java.util.Map<String, String> parameterTypeConstraints) throws IOException {
+    String payload = buildJsonPayload(hlExpressions, heapState, parameterTypeConstraints);
     String responseBody = sendLlmRequest(payload);
     
     if (responseBody == null) {
@@ -111,6 +113,18 @@ public class LLMSolverClient {
   }
   
   /**
+   * Solve high-level constraints without parameter type constraints (backward compatibility).
+   * 
+   * @param hlExpressions High-level constraint expressions to solve
+   * @param heapState Heap state information (may be null)
+   * @return LLM solver response containing result and optional valuation
+   * @throws IOException if communication with LLM service fails
+   */
+  public LLMSolverResponse solve(List<Expression<Boolean>> hlExpressions, JsonObject heapState) throws IOException {
+    return solve(hlExpressions, heapState, null);
+  }
+  
+  /**
    * Solve high-level constraints without heap state (backward compatibility).
    * 
    * @param hlExpressions High-level constraint expressions to solve
@@ -118,11 +132,11 @@ public class LLMSolverClient {
    * @throws IOException if communication with LLM service fails
    */
   public LLMSolverResponse solve(List<Expression<Boolean>> hlExpressions) throws IOException {
-    return solve(hlExpressions, null);
+    return solve(hlExpressions, null, null);
   }
 
   /**
-  * Build JSON payload from high-level expressions and heap state.
+  * Build JSON payload from high-level expressions, heap state, and parameter type constraints.
    * Uses Gson for proper JSON serialization with automatic escaping.
    * 
    * The heap_state structure includes:
@@ -131,8 +145,13 @@ public class LLMSolverClient {
    * - modifiable_objects: list of object IDs that can be modified by the solver
    * - allowed_to_allocate: whether new objects can be allocated
    * - schemas: class field schemas for LLM understanding
+   * 
+   * The parameter_type_constraints provides implicit type constraints:
+   * - Maps parameter names to their static declared types (e.g., "node" -> "ListNode")
+   * - Informs the LLM about polymorphic type constraints (actual type must be subtype of declared type)
    */
-  private String buildJsonPayload(List<Expression<Boolean>> hlExpressions, JsonObject heapState) {
+  private String buildJsonPayload(List<Expression<Boolean>> hlExpressions, JsonObject heapState,
+                                   java.util.Map<String, String> parameterTypeConstraints) {
     JsonObject payload = new JsonObject();
 
     // Build constraints array
@@ -147,10 +166,26 @@ public class LLMSolverClient {
       payload.add("heap_state", heapState);
     }
 
+    // Add parameter type constraints if available
+    if (parameterTypeConstraints != null && !parameterTypeConstraints.isEmpty()) {
+      JsonObject paramTypesJson = new JsonObject();
+      for (java.util.Map.Entry<String, String> entry : parameterTypeConstraints.entrySet()) {
+        paramTypesJson.addProperty(entry.getKey(), entry.getValue());
+      }
+      payload.add("parameter_type_constraints", paramTypesJson);
+    }
+
     // Add optional hint field
     payload.addProperty("hint", "java-jdart-llm-high-level-constraints");
 
     return gson.toJson(payload);
+  }
+  
+  /**
+   * Backward compatibility method without parameter type constraints.
+   */
+  private String buildJsonPayload(List<Expression<Boolean>> hlExpressions, JsonObject heapState) {
+    return buildJsonPayload(hlExpressions, heapState, null);
   }
 
   /**

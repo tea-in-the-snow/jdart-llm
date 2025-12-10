@@ -43,8 +43,6 @@ class PolymorphicObjectHandler implements SymbolicObjectHandler {
   private static transient JPFLogger logger = JPF.getLogger("jdart");
   
   // Delegate to DefaultObjectHandler for field processing
-  // TODO: We may need to modify it to handle polymorphic objects
-  private final DefaultObjectHandler defaultHandler = new DefaultObjectHandler();
   
   /*
    * (non-Javadoc)

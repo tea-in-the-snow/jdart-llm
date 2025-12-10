@@ -19,6 +19,7 @@ import gov.nasa.jpf.constraints.api.Variable;
 import gov.nasa.jpf.constraints.types.BuiltinTypes;
 import gov.nasa.jpf.constraints.types.Type;
 import gov.nasa.jpf.jdart.ConcolicUtil;
+import gov.nasa.jpf.jdart.Symbolic;
 import gov.nasa.jpf.jdart.SymbolicReferenceField;
 import gov.nasa.jpf.jdart.SymbolicArrayElem;
 import gov.nasa.jpf.jdart.SymbolicField;
@@ -94,6 +95,13 @@ public class SymbolicObjectsContext {
     new StringHandler(),
     new DefaultObjectHandler()
   };
+
+  private static final SymbolicObjectHandler[]  BASIC_POLYMORPHIC_HANDLE = {
+    new PrimitiveArrayHandler(),
+    new ReferenceArrayHandler(),
+    new StringHandler(),
+    new PolymorphicObjectHandler()
+  };
   
   private final Heap heap;
   private final Predicate<? super String> exclude;
@@ -137,6 +145,22 @@ public class SymbolicObjectsContext {
     
     throw new IllegalStateException("Should not happen");
   }
+
+  private SymbolicObjectHandler lookupPolymorphicHandler(ClassInfo ci) {
+    if(!excludeSpecial.apply(ci)) {
+      for(SymbolicObjectHandler shndlr : SPECIAL_HANDLERS) {
+        if(shndlr.initialize(ci))
+          return shndlr;
+      }
+    }
+    
+    for(SymbolicObjectHandler hndlr : BASIC_POLYMORPHIC_HANDLE) {
+      if(hndlr.initialize(ci))
+        return hndlr;
+    }
+    
+    throw new IllegalStateException("Should not happen");
+  }
   
   public void processObject(ElementInfo ei, String name) {
     processObject(ei, name, false);
@@ -172,6 +196,15 @@ public class SymbolicObjectsContext {
     }
     return hndlr;
   }
+
+  private SymbolicObjectHandler getSymbolicPolymorphicObjectHandler(ClassInfo ci) {
+    SymbolicObjectHandler hndlr = ci.getAttr(SymbolicObjectHandler.class);
+    if(hndlr == null) {
+      hndlr = lookupPolymorphicHandler(ci);
+      ci.setAttr(hndlr);
+    }
+    return hndlr;
+  }
   
   private void doProcessObject(ElementInfo ei, String name) {
     ClassInfo ci = ei.getClassInfo();
@@ -196,8 +229,7 @@ public class SymbolicObjectsContext {
   public void doProcessPolymorphicObject(ElementInfo ei, String name) {
     ClassInfo ci = ei.getClassInfo();
     // SymbolicObjectHandler hndlr = getSymbolicObjectHandler(ci);
-    SymbolicObjectHandler hndlr = new PolymorphicObjectHandler();
-    hndlr.initialize(ci);
+    SymbolicObjectHandler hndlr = getSymbolicPolymorphicObjectHandler(ci);
     hndlr.annotateObject(ei, name, this);
   }
 

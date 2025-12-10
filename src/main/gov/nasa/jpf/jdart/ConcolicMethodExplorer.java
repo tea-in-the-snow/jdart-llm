@@ -51,7 +51,9 @@ import gov.nasa.jpf.vm.UncaughtException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.antlr.runtime.RecognitionException;
 
@@ -174,6 +176,46 @@ public class ConcolicMethodExplorer {
     }
     
     return refVals;
+  }
+  
+  /**
+   * Get parameter type constraints as implicit constraints for the LLM solver.
+   * Returns a map from parameter names to their static type names (e.g., "node" -> "ListNode").
+   * This provides the LLM with information about the declared types of method parameters,
+   * which is crucial for polymorphic reasoning.
+   * 
+   * @return Map from symbolic parameter names (without "(ref)" suffix) to their static types
+   */
+  public Map<String, String> getParameterTypeConstraints() {
+    Map<String, String> typeConstraints = new HashMap<>();
+    
+    if (methodInfo == null) {
+      return typeConstraints;
+    }
+    
+    List<ParamConfig> pconfig = methodConfig.getParams();
+    String[] argTypeNames = methodInfo.getArgumentTypeNames();
+    
+    // Handle 'this' parameter for non-static methods
+    if (!methodInfo.isStatic()) {
+      String thisType = methodInfo.getClassName();
+      typeConstraints.put("this", thisType);
+    }
+    
+    // Handle method parameters
+    for (int i = 0; i < pconfig.size() && i < argTypeNames.length; i++) {
+      ParamConfig pc = pconfig.get(i);
+      String paramName = pc.getName();
+      
+      // Only include symbolic parameters (non-null names)
+      if (paramName != null) {
+        String typeName = argTypeNames[i];
+        // Store the static type name for this parameter
+        typeConstraints.put(paramName, typeName);
+      }
+    }
+    
+    return typeConstraints;
   }
   
 
@@ -388,7 +430,7 @@ public class ConcolicMethodExplorer {
 
         // If configured, create a symbolic parameter for the reference
         if (anaConf.createRefSymbolicParams()) {
-          Variable<?> refVar = Variable.create(BuiltinTypes.SINT32, name + "(ref)");
+          Variable<Integer> refVar = Variable.create(BuiltinTypes.SINT32, name + "(ref)");
           SymbolicParam<?> sp = new SymbolicParam<>(refVar, stackIdx);
           symContext.addStackVar(sp);
           if (ei != null)

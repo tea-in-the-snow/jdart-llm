@@ -38,6 +38,7 @@ class SolverAgent:
         constraints: List[str],
         type_hierarchy: Optional[Dict[str, str]] = None,
         heap_state: Optional[Dict[str, Any]] = None,
+        parameter_type_constraints: Optional[Dict[str, str]] = None,
         context: str = "",
     ) -> Tuple[Optional[Dict], str, Dict[str, Any]]:
         """
@@ -51,6 +52,7 @@ class SolverAgent:
             constraints: List of constraint strings to satisfy
             type_hierarchy: Optional dict mapping variable names to type information
             heap_state: Optional dict with "aliases" and "objects" keys describing heap
+            parameter_type_constraints: Optional dict mapping parameter names to their static types
             context: Optional reference information string
         
         Returns:
@@ -101,8 +103,21 @@ class SolverAgent:
             "✗ WRONG: {\"variable\": \"temp\", ...}\n\n"
             "Reasoning is encouraged; you may show your work before the final JSON."
         )
-        
         constraints_block = "\n".join(f"- {c}" for c in constraints)
+        
+        # Build parameter type constraints block (implicit constraints)
+        param_type_block = ""
+        if parameter_type_constraints:
+            param_type_block = "Parameter Type Constraints (Implicit):\n"
+            param_type_block += "These are the declared static types of method parameters. "
+            param_type_block += "The actual runtime type must be a subtype of the declared type.\n\n"
+            for param_name, declared_type in parameter_type_constraints.items():
+                param_type_block += f"  {param_name}: declared type is {declared_type}\n"
+            param_type_block += "\n"
+            param_type_block += "IMPORTANT: When generating the valuation, ensure that:\n"
+            param_type_block += "1. Each parameter's actual type is compatible with (subtype of) its declared type\n"
+            param_type_block += "2. For reference parameters like 'node(ref)', use the JVM type format (e.g., 'LListNode;')\n"
+            param_type_block += "3. The type in the valuation entry must match or be a subtype of the declared type\n\n"
         
         type_hierarchy_block = ""
         if type_hierarchy:
@@ -144,6 +159,7 @@ class SolverAgent:
         
         human_prompt = (
             f"{context_block}"
+            f"{param_type_block}"
             f"{type_hierarchy_block}"
             f"{heap_state_block}"
             f"Constraints:\n{constraints_block}\n\n"
