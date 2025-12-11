@@ -37,3 +37,5 @@ Thumbs.db
 # pychache
 /llm_service/__pycache__/
 /llm_service/agents/__pycache__/
+# Environment variables
+.env

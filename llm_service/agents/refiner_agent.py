@@ -141,6 +141,18 @@ class RefinerAgent:
                 source_context_block += "\nMethod Source Code:\n```java\n"
                 source_context_block += source_context["method_source"]
                 source_context_block += "```\n\n"
+            
+            if "related_classes" in source_context and source_context["related_classes"]:
+                source_context_block += "Related Classes (referenced in constraints):\n"
+                related = source_context["related_classes"]
+                if isinstance(related, dict):
+                    for class_name, class_source in related.items():
+                        if class_source:
+                            source_context_block += f"\nClass: {class_name}\n"
+                            source_context_block += "```java\n"
+                            source_context_block += class_source
+                            source_context_block += "```\n"
+                source_context_block += "\n"
         
         heap_state_block = ""
         if heap_state:

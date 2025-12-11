@@ -69,7 +69,7 @@ public class LLMSolverClient {
    * Create a default solver client using environment variables.
    * The service URL can be configured via LLM_SOLVER_URL (default:
    * http://127.0.0.1:8000/solve).
-   * The request timeout can be configured via LLM_SOLVER_TIMEOUT (default: 60s).
+   * The request timeout can be configured via LLM_SOLVER_TIMEOUT (default: 360s).
    */
   public static LLMSolverClient createDefault() {
     String solverUrl = System.getenv("LLM_SOLVER_URL");
@@ -77,7 +77,7 @@ public class LLMSolverClient {
       solverUrl = "http://127.0.0.1:8000/solve";
     }
 
-    int timeoutSeconds = 60;
+    int timeoutSeconds = 360;
     String timeoutEnv = System.getenv("LLM_SOLVER_TIMEOUT");
     if (timeoutEnv != null && !timeoutEnv.isEmpty()) {
       try {

@@ -51,7 +51,7 @@ def test_api_key_and_base_url():
     # Send test message
     try:
         print("\nSending test message...")
-        test_message = HumanMessage(content="Please reply with 'Test successful'")
+        test_message = HumanMessage(content="Please tell me which model you are using.(which specific version)")
         import traceback
         response = llm.invoke([test_message])
         

@@ -298,7 +298,8 @@ public abstract class AbstractPolymorphicInvocation {
     List<Expression<Boolean>> baseChecks = new ArrayList<>(possibleTypes.size());
 
     for (ClassInfo typeOption : possibleTypes) {
-      baseChecks.add(new InstanceofExpression(symbolicObjRef, typeOption.getName()));
+      // Use JVM type signature (e.g., Lpkg/Dog;) to keep constraint format consistent with bytecode instanceof
+      baseChecks.add(new InstanceofExpression(symbolicObjRef, typeOption.getSignature()));
     }
 
     for (int i = 0; i < possibleTypes.size(); i++) {
