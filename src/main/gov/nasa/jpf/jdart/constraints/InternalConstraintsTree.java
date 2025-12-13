@@ -327,6 +327,44 @@ public class InternalConstraintsTree {
   public void setReferenceTypeSymbolicValues(Valuation refVals) {
     this.referenceTypeSymbolicValues = refVals;
   }
+
+  /**
+   * Collect all constraints from all decision points in the constraints tree.
+   * This is used to check unreachable expressions across all decision points,
+   * not just the current path.
+   * 
+   * @return List of all constraints from all decision points
+   */
+  public List<Expression<Boolean>> getAllDecisionConstraints() {
+    List<Expression<Boolean>> allConstraints = new ArrayList<>();
+    collectDecisionConstraints(root, allConstraints);
+    return allConstraints;
+  }
+
+  /**
+   * Recursively collect all constraints from decision points in the tree.
+   */
+  private void collectDecisionConstraints(Node node, List<Expression<Boolean>> constraints) {
+    if (node == null) {
+      return;
+    }
+    
+    DecisionData dec = node.decisionData();
+    if (dec != null) {
+      // Add all constraints from this decision point
+      for (int i = 0; i < dec.constraints.length; i++) {
+        constraints.add(dec.constraints[i]);
+      }
+      
+      // Recursively collect from children
+      for (int i = 0; i < dec.children.length; i++) {
+        Node child = dec.children[i];
+        if (child != null) {
+          collectDecisionConstraints(child, constraints);
+        }
+      }
+    }
+  }
   
   public void setExplore(boolean explore) {
     this.explore = explore;

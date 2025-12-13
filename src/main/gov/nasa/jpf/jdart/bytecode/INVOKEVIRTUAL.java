@@ -1,6 +1,7 @@
 package gov.nasa.jpf.jdart.bytecode;
 
 import gov.nasa.jpf.vm.ClassInfo;
+import gov.nasa.jpf.vm.ClassLoaderInfo;
 import gov.nasa.jpf.vm.Instruction;
 import gov.nasa.jpf.vm.MethodInfo;
 import gov.nasa.jpf.vm.ThreadInfo;
@@ -59,6 +60,12 @@ public class INVOKEVIRTUAL extends gov.nasa.jpf.jvm.bytecode.INVOKEVIRTUAL {
       return INVOKEVIRTUAL.this.collectPossibleImplementingTypes(
           ti, declaredType, actualType, methodName, methodSignature);
     }
+
+    @Override
+    protected boolean hasConcreteMethod(
+        ClassInfo classInfo, String methodName, String methodSignature) {
+      return INVOKEVIRTUAL.this.hasConcreteMethod(classInfo, methodName, methodSignature);
+    }
   };
 
   public INVOKEVIRTUAL() {
@@ -99,10 +106,13 @@ public class INVOKEVIRTUAL extends gov.nasa.jpf.jvm.bytecode.INVOKEVIRTUAL {
 
     // Strategy 1: Use ASM to scan classpath for all subclasses
     try {
-      java.util.Set<String> subclassNames = SubclassScanner.findSubclasses(ti, declaredType);
+      System.out.println(
+          "Scanning classpath for subclasses of " + declaredType.getName() + "\n");
+      java.util.Set<String> subclassNames = SubclassScanner.findSubclasses(ti, actualType);
 
       // Try to load each discovered subclass as ClassInfo
-      gov.nasa.jpf.vm.ClassLoaderInfo classLoader = declaredType.getClassLoaderInfo();
+      // gov.nasa.jpf.vm.ClassLoaderInfo classLoader = declaredType.getClassLoaderInfo();
+      ClassLoaderInfo classLoader = actualType.getClassLoaderInfo();
 
       for (String internalName : subclassNames) {
         try {
@@ -113,9 +123,13 @@ public class INVOKEVIRTUAL extends gov.nasa.jpf.jvm.bytecode.INVOKEVIRTUAL {
           ClassInfo ci = classLoader.tryGetResolvedClassInfo(className);
 
           if (ci != null && !ci.isAbstract() && !ci.isInterface()) {
-            // Verify this class has the method
+            // Check if the class can access the method (either has it directly or inherits it)
             MethodInfo mi = ci.getMethod(methodName, methodSignature, true);
             if (mi != null && !mi.isAbstract()) {
+              System.out.println("\n" +
+                  "Discovered subclass: " + ci.getName() + 
+                  (hasConcreteMethod(ci, methodName, methodSignature) ? " (has concrete method)" : " (inherits method)"));
+              System.out.println("  Method: " + methodName + methodSignature + "\n");
               discoveredClasses.add(ci);
             }
           }
@@ -139,7 +153,14 @@ public class INVOKEVIRTUAL extends gov.nasa.jpf.jvm.bytecode.INVOKEVIRTUAL {
         for (gov.nasa.jpf.vm.ClassLoaderInfo classLoader : classLoaderList) {
           if (classLoader != null) {
             helper.scanClassLoaderWithFilter(classLoader, 
-                ci -> isSubclassOf(ci, declaredType) && hasConcreteMethod(ci, methodName, methodSignature),
+                ci -> {
+                  if (!isSubclassOf(ci, declaredType)) {
+                    return false;
+                  }
+                  // Check if the class can access the method (either has it directly or inherits it)
+                  MethodInfo mi = ci.getMethod(methodName, methodSignature, true);
+                  return mi != null && !mi.isAbstract();
+                },
                 discoveredClasses);
           }
         }
@@ -157,8 +178,11 @@ public class INVOKEVIRTUAL extends gov.nasa.jpf.jvm.bytecode.INVOKEVIRTUAL {
       }
     }
 
-    if (actualType != null && hasConcreteMethod(actualType, methodName, methodSignature)) {
+    if (actualType != null) {
+      MethodInfo mi = actualType.getMethod(methodName, methodSignature, true);
+      if (mi != null && !mi.isAbstract()) {
       discoveredClasses.add(actualType);
+      }
     }
 
     // Convert set to list and sort for deterministic ordering
@@ -182,12 +206,14 @@ public class INVOKEVIRTUAL extends gov.nasa.jpf.jvm.bytecode.INVOKEVIRTUAL {
 
   /**
    * Check if a class has a concrete implementation of the method.
+   * Only checks methods defined directly in this class, not inherited from parents.
    */
-  private boolean hasConcreteMethod(ClassInfo classInfo, String methodName, String methodSignature) {
+  protected boolean hasConcreteMethod(ClassInfo classInfo, String methodName, String methodSignature) {
     if (classInfo == null || classInfo.isAbstract() || classInfo.isInterface()) {
       return false;
     }
-    MethodInfo mi = classInfo.getMethod(methodName, methodSignature, true);
+    // Use false to only check methods defined in this class, not inherited ones
+    MethodInfo mi = classInfo.getMethod(methodName, methodSignature, false);
     return mi != null && !mi.isAbstract();
   }
 

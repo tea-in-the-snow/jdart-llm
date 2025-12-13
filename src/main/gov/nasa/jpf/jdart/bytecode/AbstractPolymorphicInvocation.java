@@ -1,10 +1,7 @@
 package gov.nasa.jpf.jdart.bytecode;
 
 import gov.nasa.jpf.constraints.api.Expression;
-import gov.nasa.jpf.constraints.expressions.InstanceofExpression;
-import gov.nasa.jpf.constraints.expressions.LogicalOperator;
-import gov.nasa.jpf.constraints.expressions.Negation;
-import gov.nasa.jpf.constraints.expressions.PropositionalCompound;
+import gov.nasa.jpf.constraints.expressions.IsExactTypeExpression;
 import gov.nasa.jpf.jdart.ConcolicMethodExplorer;
 import gov.nasa.jpf.vm.ClassInfo;
 import gov.nasa.jpf.vm.Instruction;
@@ -98,6 +95,18 @@ public abstract class AbstractPolymorphicInvocation {
       String methodName, String methodSignature);
 
   /**
+   * Check if a class has a concrete implementation of the method.
+   * Subclasses implement this to handle virtual methods vs interface methods differently.
+   * 
+   * @param classInfo       The class to check
+   * @param methodName      Method name
+   * @param methodSignature Method signature
+   * @return true if the class has a concrete implementation of the method
+   */
+  protected abstract boolean hasConcreteMethod(
+      ClassInfo classInfo, String methodName, String methodSignature);
+
+  /**
    * Execute the polymorphic invocation with symbolic execution support.
    * This method should be called BEFORE super.execute() to collect symbolic constraints.
    * @param ti ThreadInfo
@@ -116,9 +125,7 @@ public abstract class AbstractPolymorphicInvocation {
     int objRef = ti.getCalleeThis(argSize);
     StackFrame sf = ti.getModifiableTopFrame();
 
-    // Check if the object reference is null
     if (objRef == MJIEnv.NULL) {
-      // A null reference will cause a NullPointerException, skip symbolic execution
       return;
     }
 
@@ -192,14 +199,12 @@ public abstract class AbstractPolymorphicInvocation {
           }
         }
 
-        // If a new runtime type shows up that we did not cache before, add it once
-        if (!firstVisitForSite && actualType != null && findTypeIndex(possibleTypes, actualType) < 0) {
-          List<ClassInfo> updated = new ArrayList<>(possibleTypes);
-          updated.add(actualType);
-          updated.sort(this::compareBySpecificity);
-          possibleTypesCache.put(cacheKey, new ArrayList<>(updated));
-          possibleTypes = updated;
-        }
+        // IMPORTANT: Do NOT modify the cache during re-execution!
+        // The cached type list must remain constant across all executions to ensure
+        // consistent branch count in the constraint tree. Adding new runtime types
+        // would change the number of branches and break the execution tree.
+        // If a runtime type is not in the cached list, it will be handled by using
+        // the closest matching branch index.将这个子类的分支设置为不访问
 
         if (!possibleTypes.isEmpty()) {
           // Build constraints when the explorer requests them; log only on the
@@ -221,7 +226,8 @@ public abstract class AbstractPolymorphicInvocation {
               System.out.println();
             }
 
-            constraints = buildExclusiveTypeConstraints(symbolicObjRef, possibleTypes);
+            constraints = buildExclusiveTypeConstraints(
+                ti, symbolicObjRef, possibleTypes, methodName, methodSignature);
 
             if (firstVisitForSite) {
               System.out.println("Generated instanceof constraints for " + getInstructionName() + ":");
@@ -289,28 +295,40 @@ public abstract class AbstractPolymorphicInvocation {
   /**
    * Build exclusive type constraints for each possible type.
    * Each constraint ensures that the object is of a specific type AND not any of the previous types.
+   * Uses IsExactTypeExpression instead of InstanceofExpression to check exact type match.
+   * Marks branches as unreachable if the type doesn't have a concrete method implementation.
+   * 
+   * @param ti              ThreadInfo (for context, though not directly used here)
+   * @param symbolicObjRef  The symbolic object reference expression
+   * @param possibleTypes   List of possible types
+   * @param methodName      Method name to check for concrete implementation
+   * @param methodSignature Method signature to check for concrete implementation
+   * @return Array of constraints, one for each possible type
    */
   @SuppressWarnings("unchecked")
   protected Expression<Boolean>[] buildExclusiveTypeConstraints(
-      Expression<?> symbolicObjRef, List<ClassInfo> possibleTypes) {
+      ThreadInfo ti, Expression<?> symbolicObjRef, List<ClassInfo> possibleTypes,
+      String methodName, String methodSignature) {
 
     Expression<Boolean>[] constraints = (Expression<Boolean>[]) new Expression[possibleTypes.size()];
     List<Expression<Boolean>> baseChecks = new ArrayList<>(possibleTypes.size());
 
     for (ClassInfo typeOption : possibleTypes) {
-      // Use JVM type signature (e.g., Lpkg/Dog;) to keep constraint format consistent with bytecode instanceof
-      baseChecks.add(new InstanceofExpression(symbolicObjRef, typeOption.getSignature()));
+      // Check if this type has a concrete implementation of the method (defined directly, not inherited)
+      // Types without concrete implementations are marked as unreachable
+      boolean hasConcrete = hasConcreteMethod(typeOption, methodName, methodSignature);
+      // Use JVM type signature (e.g., Lpkg/Dog;) to keep constraint format consistent with bytecode
+      // Mark as unreachable if the type doesn't have a concrete method implementation
+      baseChecks.add(new IsExactTypeExpression(
+          symbolicObjRef, typeOption.getSignature(), !hasConcrete));
     }
 
+    // For IsExactTypeExpression, each constraint is already mutually exclusive
+    // because IsExactType checks exact type match (val.getClass() == typeClass).
+    // If an object is exactly type Cat, it cannot be exactly type Dog or Animal.
+    // Therefore, we don't need to add exclusion constraints.
     for (int i = 0; i < possibleTypes.size(); i++) {
-      Expression<Boolean> constraint = baseChecks.get(i);
-      for (int j = 0; j < i; j++) {
-        constraint = new PropositionalCompound(
-            constraint,
-            LogicalOperator.AND,
-            new Negation(baseChecks.get(j)));
-      }
-      constraints[i] = constraint;
+      constraints[i] = baseChecks.get(i);
     }
 
     return constraints;

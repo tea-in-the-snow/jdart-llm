@@ -385,7 +385,7 @@ public class SourceContextCollector {
 			Map<String, String> parameterTypeConstraints) {
 		Set<String> typeTokens = new HashSet<>();
 
-		System.out.println("\n\n");
+		// System.out.println("\n\n");
 
 		if (hlExpressions != null) {
 			for (Expression<Boolean> expr : hlExpressions) {
@@ -393,11 +393,11 @@ public class SourceContextCollector {
 					continue;
 				String s = expr.toString();
 
-				System.out.println("HL Expression: " + s);
+				// System.out.println("HL Expression: " + s);
 
 				Matcher m = JVM_TYPE_PATTERN.matcher(s);
 				while (m.find()) {
-					System.out.println("  Found type token: " + m.group());
+					// System.out.println("  Found type token: " + m.group());
 					typeTokens.add(m.group());
 				}
 
@@ -428,21 +428,21 @@ public class SourceContextCollector {
 				continue;
 			}
 
-      System.out.println("Collecting related class source for: " + className);
+    //   System.out.println("Collecting related class source for: " + className);
 
 			String source = resolveClassSourceByName(className);
-      System.out.println("  Resolved source length: " + (source != null ? source.length() : "null"));
+    //   System.out.println("  Resolved source length: " + (source != null ? source.length() : "null"));
 
 			if (source != null && !source.isEmpty()) {
 				if (source.length() > config.maxRelatedClassLength) {
 					source = source.substring(0, config.maxRelatedClassLength) + "\n... (truncated)";
 				}
-        System.out.println("  Collected source (" + source.length() + " chars)");
+        // System.out.println("  Collected source (" + source.length() + " chars)");
 				related.addProperty(className, source);
 			}
 		}
 
-		System.out.println("\n\n");
+		// System.out.println("\n\n");
 
 		return related;
 	}
@@ -490,7 +490,7 @@ public class SourceContextCollector {
 			if (sysCl != null) {
 				ClassInfo classInfo = sysCl.getResolvedClassInfo(className);
 				if (classInfo != null) {
-					System.out.println("  Found ClassInfo for: " + className + " in file: " + classInfo.getSourceFileName());
+					// System.out.println("  Found ClassInfo for: " + className + " in file: " + classInfo.getSourceFileName());
 					Source src = resolveSource(classInfo);
 					if (src != null) {
 						String rendered = extractClassDefinition(src, className);

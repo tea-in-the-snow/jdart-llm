@@ -59,6 +59,12 @@ public class INVOKEINTERFACE extends gov.nasa.jpf.jvm.bytecode.INVOKEINTERFACE {
       return INVOKEINTERFACE.this.collectPossibleImplementingTypes(
           ti, declaredType, actualType, methodName, methodSignature);
     }
+
+    @Override
+    protected boolean hasConcreteMethod(
+        ClassInfo classInfo, String methodName, String methodSignature) {
+      return INVOKEINTERFACE.this.hasConcreteMethod(classInfo, methodName, methodSignature);
+    }
   };
 
   public INVOKEINTERFACE() {
@@ -177,7 +183,7 @@ public class INVOKEINTERFACE extends gov.nasa.jpf.jvm.bytecode.INVOKEINTERFACE {
   /**
    * Check if a class has a concrete implementation of the method.
    */
-  private boolean hasConcreteMethod(ClassInfo classInfo, String methodName, String methodSignature) {
+  protected boolean hasConcreteMethod(ClassInfo classInfo, String methodName, String methodSignature) {
     if (classInfo == null || classInfo.isAbstract() || classInfo.isInterface()) {
       return false;
     }
